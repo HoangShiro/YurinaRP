@@ -50,9 +50,11 @@
         <div class="status-indicator online">
           <span class="status-dot"></span>
           <span class="status-label">Upstash Redis Online</span>
-        </div>
       </div>
     </aside>
+
+    <!-- Sidebar Backdrop for Mobile -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
     <!-- Main Content Area -->
     <main class="main-content">
@@ -75,10 +77,10 @@
             <span id="headerPlatinumReserves">308,744.5 Pt</span>
           </div>
           <button class="btn btn-secondary btn-sm" id="btnAuthSettings" title="Auth Key Settings">
-            <i data-lucide="lock"></i> <span id="authStatusText">Key Set</span>
+            <i data-lucide="lock"></i> <span class="btn-text" id="authStatusText">Key Set</span>
           </button>
-          <button class="btn btn-primary btn-sm" id="btnQuickRefresh">
-            <i data-lucide="refresh-cw"></i> Refresh
+          <button class="btn btn-primary btn-sm" id="btnQuickRefresh" title="Refresh">
+            <i data-lucide="refresh-cw"></i> <span class="btn-text">Refresh</span>
           </button>
         </div>
       </header>

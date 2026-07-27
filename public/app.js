@@ -193,6 +193,24 @@ function initNavigation() {
     mutations: 'State Mutations & Upstash Redis'
   };
 
+  const sidebar = document.querySelector('.sidebar');
+  const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+  const mobileToggle = document.getElementById('mobileNavToggle');
+
+  function closeSidebar() {
+    if (sidebar) sidebar.classList.remove('open');
+    if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+  }
+
+  function toggleSidebar() {
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.toggle('open');
+    if (sidebarBackdrop) {
+      if (isOpen) sidebarBackdrop.classList.add('active');
+      else sidebarBackdrop.classList.remove('active');
+    }
+  }
+
   navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const tabTarget = btn.getAttribute('data-tab');
@@ -216,17 +234,33 @@ function initNavigation() {
       if (pageTitle && pageTitles[tabTarget]) {
         pageTitle.textContent = pageTitles[tabTarget];
       }
+
+      // Auto close sidebar on mobile after selecting a tab
+      closeSidebar();
     });
   });
 
-  // Mobile sidebar toggle
-  const mobileToggle = document.getElementById('mobileNavToggle');
-  const sidebar = document.querySelector('.sidebar');
-  if (mobileToggle && sidebar) {
-    mobileToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
+  // Mobile sidebar toggle button
+  if (mobileToggle) {
+    mobileToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleSidebar();
     });
   }
+
+  // Close sidebar when clicking backdrop
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', closeSidebar);
+  }
+
+  // Close sidebar when clicking anywhere outside on mobile
+  document.addEventListener('click', (e) => {
+    if (sidebar && sidebar.classList.contains('open')) {
+      if (!sidebar.contains(e.target) && !mobileToggle?.contains(e.target)) {
+        closeSidebar();
+      }
+    }
+  });
 }
 
 // Domain Chip Selector
