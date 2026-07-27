@@ -811,6 +811,7 @@
       const tr = document.createElement('tr');
       const displayPrice = item.price_raw || (typeof item.price_copper === 'number' ? formatCopperForInput(item.price_copper) : '0');
       const displayCost = item.cost_raw || (typeof item.unit_cost_copper === 'number' ? formatCopperForInput(item.unit_cost_copper) : '0');
+      const startDate = typeof item.start_date === 'number' ? item.start_date : (parseInt(item.start_date, 10) || 1);
 
       tr.innerHTML = `
         <td><input type="text" class="form-input form-input-sm cat-name" value="${item.name || ''}" placeholder="Item Name"></td>
@@ -825,6 +826,7 @@
         <td><input type="text" class="form-input form-input-sm cat-price" value="${displayPrice}" placeholder="e.g. 1G 50S or 50s"></td>
         <td><input type="text" class="form-input form-input-sm cat-cost" value="${displayCost}" placeholder="e.g. 2S or 200c"></td>
         <td><input type="number" class="form-input form-input-sm cat-sold" value="${item.daily_units_sold || 0}"></td>
+        <td><input type="number" min="1" class="form-input form-input-sm cat-start-date" value="${startDate}" placeholder="Day 1"></td>
         <td><input type="text" class="form-input form-input-sm cat-val" value="${item.value || ''}" placeholder="e.g. -50% or -5S"></td>
         <td>
           <button class="btn-icon btn-icon-danger btn-delete-cat" data-index="${index}" title="Remove Item">
@@ -850,6 +852,7 @@
       const price_copper = parseCurrencyToCopper(price_raw);
       const unit_cost_copper = parseCurrencyToCopper(cost_raw);
       const daily_units_sold = parseInt(tr.querySelector('.cat-sold').value, 10) || 0;
+      const start_date_val = tr.querySelector('.cat-start-date') ? (parseInt(tr.querySelector('.cat-start-date').value, 10) || 1) : 1;
       const value = tr.querySelector('.cat-val').value.trim();
 
       if (name) {
@@ -864,7 +867,7 @@
           daily_units_sold,
           monthly_units_sold: daily_units_sold * 30,
           sold_out: false,
-          start_date: 1,
+          start_date: start_date_val,
           branches: 1,
           value,
           description: type === 'fee_revenue_share' ? 'Dynamic fee/revenue sharing formula' : ''
@@ -1122,6 +1125,7 @@
         <td><input type="text" class="form-input form-input-sm cat-price" value="10S" placeholder="e.g. 1G 50S or 50s"></td>
         <td><input type="text" class="form-input form-input-sm cat-cost" value="2S" placeholder="e.g. 2S or 200c"></td>
         <td><input type="number" class="form-input form-input-sm cat-sold" value="50"></td>
+        <td><input type="number" min="1" class="form-input form-input-sm cat-start-date" value="1" placeholder="Day 1"></td>
         <td><input type="text" class="form-input form-input-sm cat-val" placeholder="e.g. -50% or -5S"></td>
         <td>
           <button class="btn-icon btn-icon-danger btn-delete-cat"><i data-lucide="trash"></i></button>
