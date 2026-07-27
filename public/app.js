@@ -46,9 +46,13 @@ async function verifyKey(key) {
     const res = await fetch('/v1/auth/verify', {
       headers: { 'Authorization': `Bearer ${key}` }
     });
-    return res.ok;
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok !== false) {
+      return { ok: true, message: data.message || 'Xác thực thành công' };
+    }
+    return { ok: false, message: data.message || data.error?.message || `Lỗi xác thực (HTTP ${res.status})` };
   } catch (err) {
-    return false;
+    return { ok: false, message: `Lỗi kết nối server: ${err.message}` };
   }
 }
 
@@ -101,14 +105,14 @@ async function initAuth() {
     return false;
   }
 
-  const isValid = await verifyKey(savedKey);
-  if (isValid) {
+  const result = await verifyKey(savedKey);
+  if (result.ok) {
     updateAuthStatusUI(true);
     hideAuthModal();
     return true;
   } else {
     updateAuthStatusUI(false);
-    showAuthModal('CLIENT_AUTH_KEY đã lưu không hợp lệ. Vui lòng nhập lại!');
+    showAuthModal(result.message);
     return false;
   }
 }
@@ -152,7 +156,7 @@ function initAuthForm() {
         submitBtn.textContent = 'Đang xác thực...';
       }
 
-      const isValid = await verifyKey(key);
+      const result = await verifyKey(key);
 
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -160,7 +164,7 @@ function initAuthForm() {
         if (window.lucide) lucide.createIcons();
       }
 
-      if (isValid) {
+      if (result.ok) {
         setAuthKey(key);
         updateAuthStatusUI(true);
         hideAuthModal();
@@ -168,7 +172,7 @@ function initAuthForm() {
         loadWorldState();
       } else {
         if (errEl) {
-          errEl.textContent = 'Xác thực thất bại! CLIENT_AUTH_KEY không chính xác.';
+          errEl.textContent = result.message;
           errEl.classList.remove('hidden');
         }
       }

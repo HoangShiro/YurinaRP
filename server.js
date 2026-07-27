@@ -94,6 +94,24 @@ const FALLBACK_MODELS = [
   'nvidia/nemotron-3-ultra-550b-a55b'
 ];
 
+// ─── Auth Helpers ────────────────────────────────────────────────────────────
+
+function extractBearerToken(authHeader) {
+  if (!authHeader || typeof authHeader !== 'string') return null;
+  if (authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  return authHeader.trim();
+}
+
+function safeTimingEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
 // ─── Middleware ─────────────────────────────────────────────────────────────
 
 app.use(cors());
@@ -105,14 +123,17 @@ app.get('/', (req, res) => {
 });
 
 app.get('/v1/auth/verify', (req, res) => {
-  const token = extractBearerToken(req.headers.authorization);
   if (!CLIENT_AUTH_KEY) {
-    return res.status(500).json({ ok: false, message: 'CLIENT_AUTH_KEY not set on server' });
+    return res.status(401).json({ 
+      ok: false, 
+      message: 'CLIENT_AUTH_KEY chưa được cài đặt trong Environment Variables trên server Vercel!' 
+    });
   }
+  const token = extractBearerToken(req.headers.authorization);
   if (token && safeTimingEqual(token, CLIENT_AUTH_KEY)) {
     return res.json({ ok: true, message: 'Authenticated successfully' });
   }
-  return res.status(403).json({ ok: false, message: 'Invalid authentication credentials' });
+  return res.status(403).json({ ok: false, message: 'Mật khẩu/CLIENT_AUTH_KEY không chính xác!' });
 });
 
 app.use((req, res, next) => {
