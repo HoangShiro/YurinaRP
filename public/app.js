@@ -1205,15 +1205,18 @@
     // Simulator Runner
     el.btnRunSimulation.addEventListener('click', async () => {
       try {
-        const text = el.simSampleText.value.trim();
-        log('Running context simulation dry-run...', 'info');
+        const text = el.simSampleText ? el.simSampleText.value.trim() : '';
+        const prevAssistant = document.getElementById('simPrevAssistantText')?.value || '';
+        log('Running full context simulation dry-run...', 'info');
 
         const res = await fetch('/v1/lorebooks/compile', {
           method: 'POST',
           headers: getHeaders(),
           body: JSON.stringify({
             store: state.lorebookStore,
-            sampleText: text
+            systemPromptStore: state.systemPromptStore,
+            sampleText: text,
+            previousAssistantText: prevAssistant
           })
         });
 
@@ -1221,11 +1224,16 @@
         const data = await res.json();
 
         el.simCompiledOutput.textContent = data.compiled_prompt || '(Empty prompt returned)';
-        el.simOutDay.textContent = `Extracted Day: ${data.current_day !== null ? `Day ${data.current_day}` : 'None'}`;
-        el.simOutCount.textContent = `Active Lores: ${data.active_count}`;
-        el.simOutTarget.textContent = `Target: ${data.insertion_mode === 'user_msg' ? 'User Message' : 'System Context'}`;
+        if (el.simOutDay) el.simOutDay.textContent = `Extracted Day: ${data.current_day !== null ? `Day ${data.current_day}` : 'None'}`;
+        if (el.simOutCount) el.simOutCount.textContent = `Active Lores: ${data.active_count}`;
 
-        log(`Simulation finished. Active Lores: ${data.active_count}`, 'success');
+        const simOutRules = document.getElementById('simOutRules');
+        if (simOutRules) simOutRules.textContent = `Triggered Rules: ${data.triggered_rules_count || 0}`;
+
+        const simOutFixFormat = document.getElementById('simOutFixFormat');
+        if (simOutFixFormat) simOutFixFormat.textContent = `FixFormat: ${data.fix_format ? 'On' : 'Off'} | AutoLB: ${data.auto_line_break ? 'On' : 'Off'}`;
+
+        log(`Simulation finished. Active Lores: ${data.active_count}, Triggered Rules: ${data.triggered_rules_count || 0}`, 'success');
       } catch (err) {
         log(`Simulation error: ${err.message}`, 'error');
       }

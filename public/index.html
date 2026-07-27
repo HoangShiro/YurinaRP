@@ -561,28 +561,34 @@
               <h3><i data-lucide="terminal"></i> Input Conversation Simulator</h3>
             </div>
             <div class="card-body">
+              <div class="form-group mb-3">
+                <label for="simPrevAssistantText">Previous Assistant Response (Optional - for testing length/keyremind rules):</label>
+                <textarea id="simPrevAssistantText" class="form-textarea code-font" rows="3" placeholder="Enter previous assistant response text..."></textarea>
+              </div>
+
               <div class="form-group">
                 <label for="simSampleText">Sample User Request Message:</label>
-                <textarea id="simSampleText" class="form-textarea code-font" rows="6" placeholder="[ 🕒 Day 242] I am heading over to the YuriStore main branch to buy some bento boxes.">[ 🕒 Day 242] I am heading over to the YuriStore main branch to buy some bento boxes.</textarea>
+                <textarea id="simSampleText" class="form-textarea code-font" rows="5" placeholder="[ 🕒 Day 242] I am heading over to the YuriStore main branch to buy some bento boxes.">[ 🕒 Day 242] I am heading over to the YuriStore main branch to buy some bento boxes.</textarea>
               </div>
               <button class="btn btn-accent w-full mt-4" id="btnRunSimulation">
-                <i data-lucide="play"></i> Run Context Compilation Engine
+                <i data-lucide="play"></i> Run Full Context Compilation Engine
               </button>
             </div>
           </div>
 
           <div class="card glass flex-1">
             <div class="card-header">
-              <h3><i data-lucide="file-output"></i> Compiled Markdown Prompt Output</h3>
+              <h3><i data-lucide="file-output"></i> Compiled Final Prompt Stack</h3>
               <button class="btn btn-secondary btn-sm" id="btnCopyCompiledPrompt"><i data-lucide="copy"></i> Copy Output</button>
             </div>
             <div class="card-body">
-              <div class="sim-meta-bar mb-3">
+              <div class="sim-meta-bar mb-3 flex flex-wrap gap-2">
                 <span class="badge badge-day" id="simOutDay">Extracted Day: Day 242</span>
-                <span class="badge badge-info" id="simOutCount">Active Lores: 1</span>
-                <span class="badge badge-purple" id="simOutTarget">Target: System Context</span>
+                <span class="badge badge-info" id="simOutCount">Active Lores: 0</span>
+                <span class="badge badge-purple" id="simOutRules">Triggered Rules: 0</span>
+                <span class="badge badge-status-active" id="simOutFixFormat">FixFormat: On</span>
               </div>
-              <pre class="code-preview" id="simCompiledOutput">Run simulation to view compiled prompt context...</pre>
+              <pre class="code-preview" id="simCompiledOutput">Run simulation to view complete compiled prompt context (System Prompt + World State + Lorebook + Rules)...</pre>
             </div>
           </div>
         </div>

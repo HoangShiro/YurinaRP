@@ -433,20 +433,86 @@ app.post('/v1/lorebooks', async (req, res) => {
 
 app.post('/v1/lorebooks/compile', async (req, res) => {
   try {
-    const { store: reqStore, messages: reqMessages, sampleText } = req.body;
+    const { store: reqStore, systemPromptStore: reqSpStore, messages: reqMessages, sampleText, previousAssistantText } = req.body;
     const store = reqStore || await fetchRemoteLorebookStore();
-    const messages = Array.isArray(reqMessages)
-      ? reqMessages
-      : [{ role: 'user', content: sampleText || '[ 🕒 Day 242] Testing Lorebook Compile' }];
+    const systemPromptStore = reqSpStore || await fetchRemoteSystemPromptStore();
 
-    const result = compileLorebookStore(store, messages);
-    const dayExtracted = extractCurrentDay(messages);
+    let messages = [];
+    if (Array.isArray(reqMessages) && reqMessages.length > 0) {
+      messages = reqMessages.map(m => ({ ...m }));
+    } else {
+      if (previousAssistantText && previousAssistantText.trim()) {
+        messages.push({ role: 'assistant', content: previousAssistantText.trim() });
+      }
+      messages.push({ role: 'user', content: sampleText || '[ 🕒 Day 242] Testing Context Compile' });
+    }
+
+    // 1. Prepend Base System Prompt
+    if (systemPromptStore && systemPromptStore.system_prompt) {
+      if (messages[0]?.role === 'system') {
+        if (!messages[0].content.includes(systemPromptStore.system_prompt)) {
+          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
+        }
+      } else {
+        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
+      }
+    }
+
+    // 2. Process World State Tick & Snapshot
+    const worldState = await processWorldStateTick(messages);
+    const worldSnapshot = compileWorldStateSnapshot(worldState);
+
+    // 3. Compile Lorebook Store
+    const compiledLore = compileLorebookStore(store, messages);
+
+    const contextParts = [worldSnapshot];
+    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+      contextParts.push(compiledLore.compiledPrompt);
+    }
+    const combinedContext = contextParts.filter(Boolean).join('\n\n');
+
+    if (combinedContext && Array.isArray(messages) && messages.length > 0) {
+      if (messages[0].role === 'system') {
+        messages[0].content += '\n\n' + combinedContext;
+      } else {
+        messages.unshift({ role: 'system', content: combinedContext });
+      }
+    }
+
+    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          messages[i].content += '\n\n' + compiledLore.compiledPrompt;
+          break;
+        }
+      }
+    }
+
+    // 4. Evaluate System Prompt Rules & Event Triggers
+    const {
+      messages: eventProcessedMessages,
+      fixFormat,
+      autoLineBreak,
+      triggeredPrompts
+    } = processEventTriggers(messages, systemPromptStore);
+
+    const dayExtracted = extractCurrentDay(eventProcessedMessages);
+
+    // Format full prompt output with role headers
+    const fullPromptOutput = eventProcessedMessages
+      .map(m => `=== [ROLE: ${m.role.toUpperCase()}] ===\n${m.content}`)
+      .join('\n\n');
+
     res.json({
       status: 'ok',
       current_day: dayExtracted,
-      insertion_mode: result.insertionMode,
-      active_count: result.activeCount,
-      compiled_prompt: result.compiledPrompt
+      insertion_mode: compiledLore.insertionMode,
+      active_count: compiledLore.activeCount,
+      triggered_rules_count: triggeredPrompts.length,
+      fix_format: fixFormat,
+      auto_line_break: autoLineBreak,
+      compiled_prompt: fullPromptOutput,
+      triggered_prompts: triggeredPrompts
     });
   } catch (err) {
     res.status(500).json({ error: { message: err.message, type: 'lorebooks_compile_error' } });
