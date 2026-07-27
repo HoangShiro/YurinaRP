@@ -683,7 +683,7 @@
     });
 
     // Apply Lorebook Settings
-    el.btnSaveLbSettings.addEventListener('click', () => {
+    el.btnSaveLbSettings.addEventListener('click', async () => {
       const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
       if (!lb) return;
 
@@ -698,6 +698,7 @@
 
       log(`Updated Lorebook settings: ${lb.name}`, 'success');
       renderHierarchyTree();
+      await saveLorebookStore();
     });
 
     // Add Lore under Lorebook
@@ -728,7 +729,7 @@
     });
 
     // Delete Lorebook
-    el.btnDeleteLorebook.addEventListener('click', () => {
+    el.btnDeleteLorebook.addEventListener('click', async () => {
       if (!confirm('Are you sure you want to delete this entire Lorebook?')) return;
       state.lorebookStore.lorebooks = state.lorebookStore.lorebooks.filter(b => b.id !== state.selectedLbId);
       state.selectedLbId = null;
@@ -737,6 +738,7 @@
       el.lorebookEditorView.classList.add('hidden');
       el.emptyEditorView.classList.remove('hidden');
       log('Deleted Lorebook.', 'info');
+      await saveLorebookStore();
     });
 
     // Sub-Tabs in Lore Entry Editor
@@ -783,7 +785,7 @@
     el.btnAddCustomRow.addEventListener('click', () => addKvRow(el.customKvContainer));
 
     // Save Lore Entry
-    el.btnSaveLoreEntry.addEventListener('click', () => {
+    el.btnSaveLoreEntry.addEventListener('click', async () => {
       const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
       if (!lb) return;
       const lore = (lb.lores || []).find(l => l.id === state.selectedLoreId);
@@ -816,10 +818,11 @@
 
       log(`Saved Lore Entry: ${lore.name}`, 'success');
       renderHierarchyTree();
+      await saveLorebookStore();
     });
 
     // Delete Lore Entry
-    el.btnDeleteLoreEntry.addEventListener('click', () => {
+    el.btnDeleteLoreEntry.addEventListener('click', async () => {
       if (!confirm('Are you sure you want to delete this Lore entry?')) return;
       const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
       if (!lb) return;
@@ -827,6 +830,7 @@
       state.selectedLoreId = null;
       selectLorebook(lb.id);
       log('Deleted Lore entry.', 'info');
+      await saveLorebookStore();
     });
 
     // Simulator Runner
