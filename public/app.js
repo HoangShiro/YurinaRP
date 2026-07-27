@@ -456,11 +456,93 @@
     renderKvContainer(el.customKvContainer, area.custom_data || {});
   }
 
+  // --- CURRENCY PARSER & FORMATTERS ---
+  function parseCurrencyToCopper(valStr) {
+    if (typeof valStr === 'number') return valStr;
+    if (!valStr) return 0;
+
+    const str = String(valStr).trim();
+    if (!str) return 0;
+
+    // Pure number check (e.g. "1000")
+    if (/^-?\d+(\.\d+)?$/.test(str)) {
+      return Math.round(parseFloat(str));
+    }
+
+    let totalCopper = 0;
+    const isNegative = str.startsWith('-');
+
+    // Match expressions like "1G", "50S", "20c", "1.5 Gold", "50 Silver", etc.
+    const regex = /(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/g;
+    let match;
+    let foundMatch = false;
+
+    while ((match = regex.exec(str)) !== null) {
+      foundMatch = true;
+      const num = parseFloat(match[1]) || 0;
+      const unit = match[2].toLowerCase();
+
+      if (unit === 'g' || unit === 'gold' || unit === 'golds') {
+        totalCopper += Math.round(num * 10000);
+      } else if (unit === 's' || unit === 'silver' || unit === 'silvers') {
+        totalCopper += Math.round(num * 100);
+      } else if (unit === 'c' || unit === 'copper' || unit === 'coppers') {
+        totalCopper += Math.round(num);
+      }
+    }
+
+    if (!foundMatch) {
+      const numOnly = parseFloat(str.replace(/[^0-9.-]/g, ''));
+      return isNaN(numOnly) ? 0 : Math.round(numOnly);
+    }
+
+    return isNegative && totalCopper > 0 ? -totalCopper : totalCopper;
+  }
+
+  function formatCopperToGold(copperAmount) {
+    const isNegative = copperAmount < 0;
+    const absVal = Math.abs(copperAmount);
+    const goldVal = absVal / 10000;
+
+    const g = Math.floor(absVal / 10000);
+    const s = Math.floor((absVal % 10000) / 100);
+    const c = absVal % 100;
+
+    const goldFormatted = goldVal.toLocaleString(undefined, {
+      minimumFractionDigits: Number.isInteger(goldVal) ? 0 : 2,
+      maximumFractionDigits: 4
+    });
+
+    const sign = isNegative ? '-' : '';
+
+    if (g > 0 || absVal === 0) {
+      return `${sign}${goldFormatted} Gold <span class="text-sub">(${sign}${g}G ${s}S ${c}C)</span>`;
+    } else {
+      return `${sign}${goldFormatted} Gold <span class="text-sub">(${sign}${s}S ${c}C)</span>`;
+    }
+  }
+
+  function formatCopperForInput(copper) {
+    if (!copper) return '0';
+    const g = Math.floor(copper / 10000);
+    const s = Math.floor((copper % 10000) / 100);
+    const c = copper % 100;
+
+    const parts = [];
+    if (g > 0) parts.push(`${g}G`);
+    if (s > 0) parts.push(`${s}S`);
+    if (c > 0 || parts.length === 0) parts.push(`${c}C`);
+    return parts.join(' ');
+  }
+
   // --- CATALOG TABLE & CALCULATION ---
   function renderCatalogTable(catalog) {
     el.catalogTableBody.innerHTML = '';
     catalog.forEach((item, index) => {
       const tr = document.createElement('tr');
+      const displayPrice = item.price_raw || (typeof item.price_copper === 'number' ? formatCopperForInput(item.price_copper) : '0');
+      const displayCost = item.cost_raw || (typeof item.unit_cost_copper === 'number' ? formatCopperForInput(item.unit_cost_copper) : '0');
+
       tr.innerHTML = `
         <td><input type="text" class="form-input form-input-sm cat-name" value="${item.name || ''}" placeholder="Item Name"></td>
         <td>
@@ -471,10 +553,10 @@
             <option value="fee_revenue_share" ${item.type === 'fee_revenue_share' ? 'selected' : ''}>Fee / Revenue Share</option>
           </select>
         </td>
-        <td><input type="number" class="form-input form-input-sm cat-price" value="${item.price_copper || 0}"></td>
-        <td><input type="number" class="form-input form-input-sm cat-cost" value="${item.unit_cost_copper || 0}"></td>
+        <td><input type="text" class="form-input form-input-sm cat-price" value="${displayPrice}" placeholder="e.g. 1G 50S or 50s"></td>
+        <td><input type="text" class="form-input form-input-sm cat-cost" value="${displayCost}" placeholder="e.g. 2S or 200c"></td>
         <td><input type="number" class="form-input form-input-sm cat-sold" value="${item.daily_units_sold || 0}"></td>
-        <td><input type="text" class="form-input form-input-sm cat-val" value="${item.value || ''}" placeholder="e.g. -50% or -5000"></td>
+        <td><input type="text" class="form-input form-input-sm cat-val" value="${item.value || ''}" placeholder="e.g. -50% or -5S"></td>
         <td>
           <button class="btn-icon btn-icon-danger btn-delete-cat" data-index="${index}" title="Remove Item">
             <i data-lucide="trash"></i>
@@ -494,8 +576,10 @@
     rows.forEach(tr => {
       const name = tr.querySelector('.cat-name').value.trim();
       const type = tr.querySelector('.cat-type').value;
-      const price_copper = parseInt(tr.querySelector('.cat-price').value, 10) || 0;
-      const unit_cost_copper = parseInt(tr.querySelector('.cat-cost').value, 10) || 0;
+      const price_raw = tr.querySelector('.cat-price').value.trim();
+      const cost_raw = tr.querySelector('.cat-cost').value.trim();
+      const price_copper = parseCurrencyToCopper(price_raw);
+      const unit_cost_copper = parseCurrencyToCopper(cost_raw);
       const daily_units_sold = parseInt(tr.querySelector('.cat-sold').value, 10) || 0;
       const value = tr.querySelector('.cat-val').value.trim();
 
@@ -504,6 +588,8 @@
           id: generateId('item'),
           name,
           type,
+          price_raw,
+          cost_raw,
           price_copper,
           unit_cost_copper,
           daily_units_sold,
@@ -526,9 +612,9 @@
 
     catalog.forEach(item => {
       if (item.type === 'fee_revenue_share') return;
-      const p = item.price_copper || 0;
-      const c = item.unit_cost_copper || 0;
-      const s = item.daily_units_sold || 0;
+      const p = parseCurrencyToCopper(item.price_raw || item.price_copper || 0);
+      const c = parseCurrencyToCopper(item.cost_raw || item.unit_cost_copper || 0);
+      const s = parseInt(item.daily_units_sold, 10) || 0;
       gross += p * s;
       cost += c * s;
     });
@@ -540,7 +626,7 @@
         const pct = parseFloat(valStr.replace('%', '')) || 0;
         fees += Math.round(gross * (pct / 100));
       } else {
-        fees += parseInt(valStr, 10) || 0;
+        fees += parseCurrencyToCopper(valStr);
       }
     });
 
@@ -549,19 +635,19 @@
     el.catalogCalcPreview.innerHTML = `
       <div class="calc-metric-card">
         <span class="label">Total Daily Gross</span>
-        <span class="val text-success">${gross.toLocaleString()} Copper</span>
+        <span class="val text-success">${formatCopperToGold(gross)}</span>
       </div>
       <div class="calc-metric-card">
         <span class="label">Operational Costs</span>
-        <span class="val text-warning">${cost.toLocaleString()} Copper</span>
+        <span class="val text-warning">${formatCopperToGold(cost)}</span>
       </div>
       <div class="calc-metric-card">
         <span class="label">Fees & Revenue Share</span>
-        <span class="val ${fees >= 0 ? 'text-success' : 'text-danger'}">${fees >= 0 ? '+' : ''}${fees.toLocaleString()} Copper</span>
+        <span class="val ${fees >= 0 ? 'text-success' : 'text-danger'}">${fees >= 0 ? '+' : ''}${formatCopperToGold(fees)}</span>
       </div>
       <div class="calc-metric-card">
         <span class="label">Daily Net Surplus</span>
-        <span class="val text-primary">${net.toLocaleString()} Copper</span>
+        <span class="val text-primary">${formatCopperToGold(net)}</span>
       </div>
     `;
   }
@@ -764,10 +850,10 @@
             <option value="fee_revenue_share">Fee / Revenue Share</option>
           </select>
         </td>
-        <td><input type="number" class="form-input form-input-sm cat-price" value="1000"></td>
-        <td><input type="number" class="form-input form-input-sm cat-cost" value="200"></td>
+        <td><input type="text" class="form-input form-input-sm cat-price" value="10S" placeholder="e.g. 1G 50S or 50s"></td>
+        <td><input type="text" class="form-input form-input-sm cat-cost" value="2S" placeholder="e.g. 2S or 200c"></td>
         <td><input type="number" class="form-input form-input-sm cat-sold" value="50"></td>
-        <td><input type="text" class="form-input form-input-sm cat-val" placeholder="e.g. -50%"></td>
+        <td><input type="text" class="form-input form-input-sm cat-val" placeholder="e.g. -50% or -5S"></td>
         <td>
           <button class="btn-icon btn-icon-danger btn-delete-cat"><i data-lucide="trash"></i></button>
         </td>
@@ -778,7 +864,17 @@
       });
       el.catalogTableBody.appendChild(tr);
       if (window.lucide) window.lucide.createIcons();
+      updateCatalogPreview(getCatalogFromForm());
     });
+
+    if (el.catalogTableBody) {
+      el.catalogTableBody.addEventListener('input', () => {
+        updateCatalogPreview(getCatalogFromForm());
+      });
+      el.catalogTableBody.addEventListener('change', () => {
+        updateCatalogPreview(getCatalogFromForm());
+      });
+    }
 
     el.btnAddStaffRow.addEventListener('click', () => addKvRow(el.staffKvContainer));
     el.btnAddPolicyRow.addEventListener('click', () => addKvRow(el.policyKvContainer));
