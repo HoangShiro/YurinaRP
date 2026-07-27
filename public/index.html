@@ -74,6 +74,9 @@
             <i data-lucide="coins"></i>
             <span id="headerPlatinumReserves">308,744.5 Pt</span>
           </div>
+          <button class="btn btn-secondary btn-sm" id="btnAuthSettings" title="Auth Key Settings">
+            <i data-lucide="lock"></i> <span id="authStatusText">Key Set</span>
+          </button>
           <button class="btn btn-primary btn-sm" id="btnQuickRefresh">
             <i data-lucide="refresh-cw"></i> Refresh
           </button>
@@ -305,6 +308,40 @@
       <span>Mutations</span>
     </button>
   </nav>
+
+  <!-- Authentication Modal Overlay -->
+  <div class="modal-overlay hidden" id="authModal">
+    <div class="modal-card glass glow-primary">
+      <div class="modal-header">
+        <div class="modal-brand">
+          <div class="brand-icon">
+            <i data-lucide="shield-check"></i>
+          </div>
+          <div>
+            <h3>Xác thực CLIENT_AUTH_KEY</h3>
+            <span class="modal-subtitle">Nhập CLIENT_AUTH_KEY để truy cập Yuri Systems</span>
+          </div>
+        </div>
+      </div>
+      <form id="authForm" class="modal-body">
+        <div class="form-group">
+          <label for="inputAuthKey">CLIENT_AUTH_KEY:</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="inputAuthKey" placeholder="Dán CLIENT_AUTH_KEY của bạn vào đây..." class="form-input" required autocomplete="current-password">
+            <button type="button" id="btnToggleAuthVisibility" class="btn-icon" title="Hiện/Ẩn Key">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+        <div id="authErrorMessage" class="auth-error-msg hidden"></div>
+        <div class="modal-actions mt-4">
+          <button type="submit" class="btn btn-primary w-full" id="btnSubmitAuth">
+            <i data-lucide="log-in"></i> Đăng nhập / Lưu Key
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

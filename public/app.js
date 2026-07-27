@@ -3,14 +3,178 @@
 let stateData = null;
 let currentSelectedDomain = 'meta';
 
-document.addEventListener('DOMContentLoaded', () => {
+const AUTH_KEY_STORAGE = 'yuri_client_auth_key';
+
+document.addEventListener('DOMContentLoaded', async () => {
   if (window.lucide) lucide.createIcons();
 
   initNavigation();
   initDomainSelector();
   initEventListeners();
-  loadWorldState();
+  initAuthForm();
+
+  const isAuth = await initAuth();
+  if (isAuth) {
+    loadWorldState();
+  }
 });
+
+// Authentication Management
+function getAuthKey() {
+  return localStorage.getItem(AUTH_KEY_STORAGE) || '';
+}
+
+function setAuthKey(key) {
+  localStorage.setItem(AUTH_KEY_STORAGE, key);
+}
+
+function clearAuthKey() {
+  localStorage.removeItem(AUTH_KEY_STORAGE);
+}
+
+function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const key = getAuthKey();
+  if (key) {
+    headers['Authorization'] = `Bearer ${key}`;
+  }
+  return headers;
+}
+
+async function verifyKey(key) {
+  try {
+    const res = await fetch('/v1/auth/verify', {
+      headers: { 'Authorization': `Bearer ${key}` }
+    });
+    return res.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
+function showAuthModal(errMsg = '') {
+  const modal = document.getElementById('authModal');
+  const errEl = document.getElementById('authErrorMessage');
+  const input = document.getElementById('inputAuthKey');
+
+  if (input) input.value = getAuthKey();
+
+  if (errMsg && errEl) {
+    errEl.textContent = errMsg;
+    errEl.classList.remove('hidden');
+  } else if (errEl) {
+    errEl.classList.add('hidden');
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+function hideAuthModal() {
+  const modal = document.getElementById('authModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function updateAuthStatusUI(isAuthenticated) {
+  const statusText = document.getElementById('authStatusText');
+  const btnAuth = document.getElementById('btnAuthSettings');
+
+  if (isAuthenticated) {
+    if (statusText) statusText.textContent = 'Auth Key Active';
+    if (btnAuth) {
+      btnAuth.classList.remove('btn-secondary');
+      btnAuth.classList.add('btn-success');
+    }
+  } else {
+    if (statusText) statusText.textContent = 'Login Required';
+    if (btnAuth) {
+      btnAuth.classList.remove('btn-success');
+      btnAuth.classList.add('btn-secondary');
+    }
+  }
+}
+
+async function initAuth() {
+  const savedKey = getAuthKey();
+  if (!savedKey) {
+    updateAuthStatusUI(false);
+    showAuthModal();
+    return false;
+  }
+
+  const isValid = await verifyKey(savedKey);
+  if (isValid) {
+    updateAuthStatusUI(true);
+    hideAuthModal();
+    return true;
+  } else {
+    updateAuthStatusUI(false);
+    showAuthModal('CLIENT_AUTH_KEY đã lưu không hợp lệ. Vui lòng nhập lại!');
+    return false;
+  }
+}
+
+function initAuthForm() {
+  const form = document.getElementById('authForm');
+  const btnToggle = document.getElementById('btnToggleAuthVisibility');
+  const inputKey = document.getElementById('inputAuthKey');
+  const btnSettings = document.getElementById('btnAuthSettings');
+
+  if (btnSettings) {
+    btnSettings.addEventListener('click', () => {
+      showAuthModal();
+    });
+  }
+
+  if (btnToggle && inputKey) {
+    btnToggle.addEventListener('click', () => {
+      const type = inputKey.type === 'password' ? 'text' : 'password';
+      inputKey.type = type;
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('authErrorMessage');
+      const submitBtn = document.getElementById('btnSubmitAuth');
+      const key = inputKey.value.trim();
+
+      if (!key) {
+        if (errEl) {
+          errEl.textContent = 'Vui lòng nhập CLIENT_AUTH_KEY!';
+          errEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Đang xác thực...';
+      }
+
+      const isValid = await verifyKey(key);
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i data-lucide="log-in"></i> Đăng nhập / Lưu Key';
+        if (window.lucide) lucide.createIcons();
+      }
+
+      if (isValid) {
+        setAuthKey(key);
+        updateAuthStatusUI(true);
+        hideAuthModal();
+        logConsole('success', 'Xác thực CLIENT_AUTH_KEY thành công!');
+        loadWorldState();
+      } else {
+        if (errEl) {
+          errEl.textContent = 'Xác thực thất bại! CLIENT_AUTH_KEY không chính xác.';
+          errEl.classList.remove('hidden');
+        }
+      }
+    });
+  }
+}
 
 // Navigation Setup
 function initNavigation() {
@@ -80,13 +244,9 @@ function initDomainSelector() {
 // Event Listeners
 function initEventListeners() {
   document.getElementById('btnQuickRefresh').addEventListener('click', loadWorldState);
-
   document.getElementById('btnAdvanceTime').addEventListener('click', executeTimeAdvance);
-
   document.getElementById('btnSaveCatalog').addEventListener('click', saveCatalogData);
-
   document.getElementById('btnSaveDomainJson').addEventListener('click', saveDomainJsonData);
-
   document.getElementById('btnExecuteMutation').addEventListener('click', executeManualMutation);
 
   document.getElementById('btnCopySnapshot').addEventListener('click', () => {
@@ -100,7 +260,16 @@ function initEventListeners() {
 async function loadWorldState() {
   try {
     logConsole('info', 'Fetching World State from Proxy Server...');
-    const res = await fetch('/v1/worldstate');
+    const res = await fetch('/v1/worldstate', {
+      headers: getAuthHeaders()
+    });
+
+    if (res.status === 403) {
+      showAuthModal('Cần đăng nhập hoặc CLIENT_AUTH_KEY không hợp lệ!');
+      updateAuthStatusUI(false);
+      throw new Error('HTTP 403 Forbidden');
+    }
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = await res.json();
@@ -205,7 +374,7 @@ function renderDashboard(snapshotText) {
   }
 }
 
-// Execute Time Progression (&Delta;t Tick)
+// Execute Time Progression (Δt Tick)
 async function executeTimeAdvance() {
   const deltaDaysInput = document.getElementById('inputDeltaDays');
   const deltaDays = parseInt(deltaDaysInput.value, 10) || 1;
@@ -214,9 +383,15 @@ async function executeTimeAdvance() {
     logConsole('warn', `Executing Time Advance by +${deltaDays} day(s)...`);
     const res = await fetch('/v1/worldstate/tick', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ delta_days: deltaDays })
     });
+
+    if (res.status === 403) {
+      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
+      updateAuthStatusUI(false);
+      throw new Error('HTTP 403 Forbidden');
+    }
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -246,9 +421,15 @@ async function saveDomainJsonData() {
 
     const res = await fetch('/v1/worldstate/save_domain', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ domain: currentSelectedDomain, data: parsedData })
     });
+
+    if (res.status === 403) {
+      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
+      updateAuthStatusUI(false);
+      throw new Error('HTTP 403 Forbidden');
+    }
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -339,9 +520,15 @@ async function saveCatalogData() {
     logConsole('info', 'Saving updated Product Catalog to Upstash Redis...');
     const res = await fetch('/v1/worldstate/save_domain', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ domain: 'catalog', data: stateData.catalog })
     });
+
+    if (res.status === 403) {
+      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
+      updateAuthStatusUI(false);
+      throw new Error('HTTP 403 Forbidden');
+    }
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -368,7 +555,6 @@ async function executeManualMutation() {
   try {
     value = JSON.parse(rawVal);
   } catch (e) {
-    // Leave as string or number if not JSON
     if (!isNaN(rawVal) && rawVal.trim() !== '') {
       value = parseFloat(rawVal);
     }
@@ -381,9 +567,15 @@ async function executeManualMutation() {
 
     const res = await fetch('/v1/worldstate/mutate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ mutations: [mutation] })
     });
+
+    if (res.status === 403) {
+      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
+      updateAuthStatusUI(false);
+      throw new Error('HTTP 403 Forbidden');
+    }
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 

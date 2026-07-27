@@ -104,15 +104,29 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get('/v1/auth/verify', (req, res) => {
+  const token = extractBearerToken(req.headers.authorization);
+  if (!CLIENT_AUTH_KEY) {
+    return res.status(500).json({ ok: false, message: 'CLIENT_AUTH_KEY not set on server' });
+  }
+  if (token && safeTimingEqual(token, CLIENT_AUTH_KEY)) {
+    return res.json({ ok: true, message: 'Authenticated successfully' });
+  }
+  return res.status(403).json({ ok: false, message: 'Invalid authentication credentials' });
+});
+
 app.use((req, res, next) => {
   if (
     req.path === '/' ||
     req.path === '/health' ||
     req.path === '/v1/models' ||
-    req.path.startsWith('/v1/worldstate') ||
+    req.path === '/v1/auth/verify' ||
     req.path.endsWith('.html') ||
     req.path.endsWith('.css') ||
-    req.path.endsWith('.js')
+    req.path.endsWith('.js') ||
+    req.path.endsWith('.png') ||
+    req.path.endsWith('.ico') ||
+    req.path.endsWith('.svg')
   ) {
     return next();
   }
