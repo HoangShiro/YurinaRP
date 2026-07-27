@@ -451,9 +451,9 @@
     el.loreDefInput.value = area.definition || '';
 
     renderCatalogTable(area.catalog || []);
-    renderKvContainer(el.staffKvContainer, area.staff || {});
-    renderKvContainer(el.policyKvContainer, area.policy || {});
-    renderKvContainer(el.customKvContainer, area.custom_data || {});
+    renderKvContainer(el.staffKvContainer, area.staff || {}, 'Staff Name / Role (e.g. Yurina)', 'Duties, Schedule, Salary, Description');
+    renderKvContainer(el.policyKvContainer, area.policy || {}, 'Policy Name (e.g. Return Policy)', 'Policy terms & details');
+    renderKvContainer(el.customKvContainer, area.custom_data || {}, 'Metadata Key', 'Value / Description');
   }
 
   // --- CURRENCY PARSER & FORMATTERS ---
@@ -653,19 +653,19 @@
   }
 
   // --- KEY-VALUE DICTIONARY HELPERS ---
-  function renderKvContainer(container, dict) {
+  function renderKvContainer(container, dict, keyPlaceholder = 'Key / Title', valPlaceholder = 'Value / Content') {
     container.innerHTML = '';
     Object.entries(dict || {}).forEach(([key, val]) => {
-      addKvRow(container, key, typeof val === 'object' ? JSON.stringify(val) : val);
+      addKvRow(container, key, typeof val === 'object' ? JSON.stringify(val) : val, keyPlaceholder, valPlaceholder);
     });
   }
 
-  function addKvRow(container, key = '', val = '') {
+  function addKvRow(container, key = '', val = '', keyPlaceholder = 'Key / Title', valPlaceholder = 'Value / Content') {
     const row = document.createElement('div');
     row.className = 'kv-row mt-2';
     row.innerHTML = `
-      <input type="text" class="form-input form-input-sm kv-key" value="${key}" placeholder="Key / Title">
-      <input type="text" class="form-input form-input-sm kv-val" value="${val}" placeholder="Value / Content">
+      <input type="text" class="form-input form-input-sm kv-key" value="${key}" placeholder="${keyPlaceholder}">
+      <input type="text" class="form-input form-input-sm kv-val" value="${val}" placeholder="${valPlaceholder}">
       <button class="btn-icon btn-icon-danger btn-delete-kv"><i data-lucide="trash"></i></button>
     `;
     row.querySelector('.btn-delete-kv').addEventListener('click', () => row.remove());
@@ -876,9 +876,9 @@
       });
     }
 
-    el.btnAddStaffRow.addEventListener('click', () => addKvRow(el.staffKvContainer));
-    el.btnAddPolicyRow.addEventListener('click', () => addKvRow(el.policyKvContainer));
-    el.btnAddCustomRow.addEventListener('click', () => addKvRow(el.customKvContainer));
+    el.btnAddStaffRow.addEventListener('click', () => addKvRow(el.staffKvContainer, '', '', 'Staff Name / Role (e.g. Yurina)', 'Duties, Schedule, Salary, Description'));
+    el.btnAddPolicyRow.addEventListener('click', () => addKvRow(el.policyKvContainer, '', '', 'Policy Name (e.g. Return Policy)', 'Policy terms & details'));
+    el.btnAddCustomRow.addEventListener('click', () => addKvRow(el.customKvContainer, '', '', 'Metadata Key', 'Value / Description'));
 
     // Save Lore Entry
     el.btnSaveLoreEntry.addEventListener('click', async () => {
