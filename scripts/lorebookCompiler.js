@@ -338,11 +338,25 @@ function compileLorebookStore(store, messages) {
   };
 }
 
+/**
+ * Checks if at least one Lorebook in the store is operational (not 'Off' or 'None').
+ */
+function isLorebookStoreActive(store) {
+  if (!store || !Array.isArray(store.lorebooks) || store.lorebooks.length === 0) {
+    return false;
+  }
+  return store.lorebooks.some(lb => {
+    const status = (lb.status || 'Active').trim();
+    return status !== 'Off' && status !== 'None';
+  });
+}
+
 module.exports = {
   extractCurrentDay,
   calculateCatalogMetrics,
   formatLoreDetailedText,
   isLoreTriggered,
   compileLorebook,
-  compileLorebookStore
+  compileLorebookStore,
+  isLorebookStoreActive
 };

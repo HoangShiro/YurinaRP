@@ -13,7 +13,7 @@ const { processEventTriggers } = require('./scripts/eventTriggers');
 const { applyAutoLineBreak, fixTextFormatting, StreamTextProcessor } = require('./scripts/formatFixer');
 const { fetchRemoteLorebookStore, saveRemoteLorebookStore, fetchRemoteLorebook, saveRemoteLorebook } = require('./scripts/upstashLorebook');
 const { fetchRemoteSystemPromptStore, saveRemoteSystemPromptStore } = require('./scripts/upstashSystemPrompt');
-const { compileLorebookStore, extractCurrentDay } = require('./scripts/lorebookCompiler');
+const { compileLorebookStore, extractCurrentDay, isLorebookStoreActive } = require('./scripts/lorebookCompiler');
 const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/worldStateEngine');
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
@@ -450,12 +450,17 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
     // 1. Evaluate Base System Prompt
     const baseSystemPrompt = (systemPromptStore && systemPromptStore.system_prompt) ? systemPromptStore.system_prompt.trim() : '';
 
-    // 2. Process World State Tick & Snapshot
-    const worldState = await processWorldStateTick(messages);
-    const worldSnapshot = compileWorldStateSnapshot(worldState);
+    // Check if Lorebook & World State System is active (at least one Lorebook not set to 'Off')
+    const loreActive = isLorebookStoreActive(store);
 
-    // 3. Compile Lorebook Store
-    const compiledLore = compileLorebookStore(store, messages);
+    let worldSnapshot = '';
+    let compiledLore = { compiledPrompt: '', insertionMode: 'context', activeCount: 0 };
+
+    if (loreActive) {
+      const worldState = await processWorldStateTick(messages);
+      worldSnapshot = compileWorldStateSnapshot(worldState);
+      compiledLore = compileLorebookStore(store, messages);
+    }
 
     // 4. Evaluate System Prompt Rules & Event Triggers
     const {
@@ -474,11 +479,13 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
       systemContextSections.push(`--- [1] Base System Prompt ---\n${baseSystemPrompt}`);
     }
 
-    if (worldSnapshot) {
+    if (loreActive && worldSnapshot) {
       systemContextSections.push(`--- [2] World State Snapshot ---\n${worldSnapshot}`);
+    } else {
+      systemContextSections.push(`--- [2] World State Snapshot ---\n(World State System Disabled - All Lorebooks set to Off)`);
     }
 
-    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+    if (loreActive && compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
       systemContextSections.push(`--- [3] Lorebook Database Context ---\n${compiledLore.compiledPrompt}`);
     } else {
       systemContextSections.push(`--- [3] Lorebook Database Context ---\n(Lorebooks disabled or no matching keywords found)`);
@@ -703,11 +710,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const requestEnableThinking = ENABLE_THINKING_MODE || hasThink;
     const requestShowReasoning = SHOW_REASONING || hasThink;
 
-    // 1. Process World State Tick & Math Engine
-    const worldState = await processWorldStateTick(messages);
-    const worldSnapshot = compileWorldStateSnapshot(worldState);
-
-    // 2. Fetch System Prompt Store & Tiered LorebookStore
+    // 1. Fetch System Prompt Store & Tiered LorebookStore
     const systemPromptStore = await fetchRemoteSystemPromptStore();
     const lorebookStore = await fetchRemoteLorebookStore();
 
@@ -722,31 +725,37 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
 
-    const compiledLore = compileLorebookStore(lorebookStore, messages);
+    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active (at least one Lorebook not set to 'Off')
+    const loreActive = isLorebookStoreActive(lorebookStore);
+    if (loreActive) {
+      const worldState = await processWorldStateTick(messages);
+      const worldSnapshot = compileWorldStateSnapshot(worldState);
+      const compiledLore = compileLorebookStore(lorebookStore, messages);
 
-    const contextParts = [worldSnapshot];
-    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
-      contextParts.push(compiledLore.compiledPrompt);
-    }
-    const combinedContext = contextParts.filter(Boolean).join('\n\n');
-
-    if (combinedContext && Array.isArray(messages) && messages.length > 0) {
-      if (messages[0].role === 'system') {
-        if (typeof messages[0].content === 'string') {
-          messages[0].content += '\n\n' + combinedContext;
-        }
-      } else {
-        messages.unshift({ role: 'system', content: combinedContext });
+      const contextParts = [worldSnapshot];
+      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+        contextParts.push(compiledLore.compiledPrompt);
       }
-    }
+      const combinedContext = contextParts.filter(Boolean).join('\n\n');
 
-    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          if (typeof messages[i].content === 'string') {
-            messages[i].content += '\n\n' + compiledLore.compiledPrompt;
+      if (combinedContext && Array.isArray(messages) && messages.length > 0) {
+        if (messages[0].role === 'system') {
+          if (typeof messages[0].content === 'string') {
+            messages[0].content += '\n\n' + combinedContext;
           }
-          break;
+        } else {
+          messages.unshift({ role: 'system', content: combinedContext });
+        }
+      }
+
+      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            if (typeof messages[i].content === 'string') {
+              messages[i].content += '\n\n' + compiledLore.compiledPrompt;
+            }
+            break;
+          }
         }
       }
     }
