@@ -606,9 +606,10 @@
     });
 
     if (el.mobileNavToggle) {
-      el.mobileNavToggle.addEventListener('click', () => {
+      el.mobileNavToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
         el.sidebar.classList.toggle('open');
-        el.sidebarBackdrop.classList.toggle('show');
+        if (el.sidebarBackdrop) el.sidebarBackdrop.classList.toggle('show');
       });
     }
 
@@ -618,6 +619,18 @@
         el.sidebarBackdrop.classList.remove('show');
       });
     }
+
+    // Close mobile sidebar on tap outside anywhere
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth <= 768 && el.sidebar && el.sidebar.classList.contains('open')) {
+        const isInsideSidebar = el.sidebar.contains(e.target);
+        const isToggleBtn = el.mobileNavToggle && el.mobileNavToggle.contains(e.target);
+        if (!isInsideSidebar && !isToggleBtn) {
+          el.sidebar.classList.remove('open');
+          if (el.sidebarBackdrop) el.sidebarBackdrop.classList.remove('show');
+        }
+      }
+    });
 
     // Save Store
     el.btnSaveStore.addEventListener('click', saveLorebookStore);
