@@ -69,6 +69,9 @@
         </div>
 
         <div class="header-right">
+          <button class="btn btn-secondary btn-sm" id="btnAuthSettings" title="Auth Key Settings">
+            <i data-lucide="lock"></i> <span class="btn-text" id="authStatusText">Auth Key</span>
+          </button>
           <button class="btn btn-secondary btn-sm" id="btnExportDb" title="Export JSON Database">
             <i data-lucide="download"></i> <span class="btn-text">Export JSON</span>
           </button>
@@ -441,6 +444,40 @@
           <button class="btn btn-primary w-full" id="btnSubmitModalJson">Submit & Overwrite</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Authentication Modal Overlay -->
+  <div class="modal-overlay hidden" id="authModal">
+    <div class="modal-card glass glow-primary">
+      <div class="modal-header">
+        <div class="modal-brand">
+          <div class="brand-icon">
+            <i data-lucide="shield-check"></i>
+          </div>
+          <div>
+            <h3>CLIENT_AUTH_KEY Authentication</h3>
+            <span class="modal-subtitle">Enter your CLIENT_AUTH_KEY to access Yuri Systems</span>
+          </div>
+        </div>
+      </div>
+      <form id="authForm" class="modal-body mt-4">
+        <div class="form-group">
+          <label for="inputAuthKeyModal">CLIENT_AUTH_KEY:</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="inputAuthKeyModal" placeholder="Paste your CLIENT_AUTH_KEY here..." class="form-input" required autocomplete="current-password">
+            <button type="button" id="btnToggleAuthVisibilityModal" class="btn-icon" title="Toggle Password Visibility">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+        <div id="authErrorMessage" class="auth-error-msg hidden mt-2 text-danger text-sub"></div>
+        <div class="modal-actions mt-4">
+          <button type="submit" class="btn btn-primary w-full" id="btnSubmitAuth">
+            <i data-lucide="log-in"></i> Authenticate & Save Key
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

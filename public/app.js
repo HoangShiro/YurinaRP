@@ -82,6 +82,14 @@
     btnCopyCompiledPrompt: document.getElementById('btnCopyCompiledPrompt'),
 
     // Auth & Logs
+    btnAuthSettings: document.getElementById('btnAuthSettings'),
+    authStatusText: document.getElementById('authStatusText'),
+    authModal: document.getElementById('authModal'),
+    authForm: document.getElementById('authForm'),
+    inputAuthKeyModal: document.getElementById('inputAuthKeyModal'),
+    btnToggleAuthVisibilityModal: document.getElementById('btnToggleAuthVisibilityModal'),
+    authErrorMessage: document.getElementById('authErrorMessage'),
+    btnSubmitAuth: document.getElementById('btnSubmitAuth'),
     inputAuthKey: document.getElementById('inputAuthKey'),
     btnToggleAuthVisibility: document.getElementById('btnToggleAuthVisibility'),
     btnSaveAuthKey: document.getElementById('btnSaveAuthKey'),
@@ -141,7 +149,48 @@
     }
   }
 
-  // --- API CALLS ---
+  // --- API CALLS & AUTHENTICATION ---
+  async function verifyAuthKey(candidateKey) {
+    try {
+      const headers = {};
+      if (candidateKey) {
+        headers['Authorization'] = `Bearer ${candidateKey}`;
+      }
+      const res = await fetch('/v1/auth/verify', { headers });
+      const data = await res.json();
+
+      if (res.status === 401) {
+        log('CLIENT_AUTH_KEY not set on server environment variables.', 'warn');
+        if (el.authStatusText) el.authStatusText.textContent = 'No Server Key';
+        if (el.authModal) el.authModal.classList.add('hidden');
+        return true;
+      }
+
+      if (res.ok) {
+        state.authKey = candidateKey;
+        localStorage.setItem('CLIENT_AUTH_KEY', candidateKey);
+        if (el.authStatusText) el.authStatusText.textContent = 'Key Verified';
+        if (el.authModal) el.authModal.classList.add('hidden');
+        if (el.authErrorMessage) el.authErrorMessage.classList.add('hidden');
+        log('CLIENT_AUTH_KEY verified successfully.', 'success');
+        return true;
+      } else {
+        if (el.authStatusText) el.authStatusText.textContent = 'Auth Failed';
+        if (el.authErrorMessage) {
+          el.authErrorMessage.textContent = data.message || 'Invalid CLIENT_AUTH_KEY password!';
+          el.authErrorMessage.classList.remove('hidden');
+        }
+        if (el.authModal) el.authModal.classList.remove('hidden');
+        log(`Authentication failed: ${data.message}`, 'error');
+        return false;
+      }
+    } catch (err) {
+      log(`Auth verification error: ${err.message}`, 'error');
+      if (el.authModal) el.authModal.classList.remove('hidden');
+      return false;
+    }
+  }
+
   async function loadLorebookStore() {
     try {
       log('Fetching LorebookStore from server...', 'info');
@@ -703,7 +752,35 @@
       log('Copied compiled prompt to clipboard!', 'info');
     });
 
-    // Auth Key Handling
+    // Auth Key Handling & Modal
+    if (el.btnAuthSettings) {
+      el.btnAuthSettings.addEventListener('click', () => {
+        if (el.inputAuthKeyModal) el.inputAuthKeyModal.value = state.authKey || '';
+        if (el.authErrorMessage) el.authErrorMessage.classList.add('hidden');
+        if (el.authModal) el.authModal.classList.remove('hidden');
+      });
+    }
+
+    if (el.authForm) {
+      el.authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const candidate = el.inputAuthKeyModal ? el.inputAuthKeyModal.value.trim() : '';
+        const ok = await verifyAuthKey(candidate);
+        if (ok) {
+          loadLorebookStore();
+        }
+      });
+    }
+
+    if (el.btnToggleAuthVisibilityModal) {
+      el.btnToggleAuthVisibilityModal.addEventListener('click', () => {
+        if (el.inputAuthKeyModal) {
+          const type = el.inputAuthKeyModal.type === 'password' ? 'text' : 'password';
+          el.inputAuthKeyModal.type = type;
+        }
+      });
+    }
+
     if (el.inputAuthKey) el.inputAuthKey.value = state.authKey;
 
     if (el.btnToggleAuthVisibility) {
@@ -714,18 +791,20 @@
     }
 
     if (el.btnSaveAuthKey) {
-      el.btnSaveAuthKey.addEventListener('click', () => {
-        state.authKey = el.inputAuthKey.value.trim();
-        localStorage.setItem('CLIENT_AUTH_KEY', state.authKey);
-        log('CLIENT_AUTH_KEY updated in LocalStorage.', 'success');
+      el.btnSaveAuthKey.addEventListener('click', async () => {
+        const candidate = el.inputAuthKey.value.trim();
+        await verifyAuthKey(candidate);
       });
     }
   }
 
   // --- INITIALIZATION ---
-  function init() {
+  async function init() {
     bindEvents();
-    loadLorebookStore();
+    const isAuth = await verifyAuthKey(state.authKey);
+    if (isAuth) {
+      loadLorebookStore();
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);
