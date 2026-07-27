@@ -10,13 +10,21 @@
     lorebookStore: { lorebooks: [] },
     selectedLbId: null,
     selectedLoreId: null,
-    currentSubTab: 'definition'
+    currentSubTab: 'definition',
+    collapsedLbIds: new Set(JSON.parse(localStorage.getItem('yuri_collapsed_lbs') || '[]')),
+    collapsedGroupKeys: new Set(JSON.parse(localStorage.getItem('yuri_collapsed_groups') || '[]')),
+    treeScrollTop: 0
   };
+
+  function saveCollapsedStates() {
+    localStorage.setItem('yuri_collapsed_lbs', JSON.stringify(Array.from(state.collapsedLbIds)));
+    localStorage.setItem('yuri_collapsed_groups', JSON.stringify(Array.from(state.collapsedGroupKeys)));
+  }
 
   // DOM Elements
   const el = {
     // Navigation
-    navButtons: document.querySelectorAll('.nav-menu .nav-item, .mobile-bottom-nav .mobile-nav-item'),
+    navButtons: document.querySelectorAll('[data-tab]'),
     tabPages: document.querySelectorAll('.tab-page'),
     pageTitle: document.getElementById('pageTitle'),
     mobileNavToggle: document.getElementById('mobileNavToggle'),
@@ -128,7 +136,7 @@
 
   // --- TAB NAVIGATION ---
   function switchTab(tabId) {
-    el.navButtons.forEach(btn => {
+    document.querySelectorAll('[data-tab]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === tabId);
     });
     el.tabPages.forEach(page => {
@@ -143,9 +151,9 @@
       };
       el.pageTitle.textContent = titles[tabId] || 'Control Center';
     }
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 768 && el.sidebar) {
       el.sidebar.classList.remove('open');
-      el.sidebarBackdrop.classList.remove('show');
+      if (el.sidebarBackdrop) el.sidebarBackdrop.classList.remove('show');
     }
   }
 
@@ -225,9 +233,43 @@
     }
   }
 
-  // --- TREE RENDERING ---
+  function addLoreUnderLb(lbId) {
+    const lb = state.lorebookStore.lorebooks.find(b => b.id === lbId);
+    if (!lb) return;
+
+    const newLore = {
+      id: generateId('lore'),
+      name: 'New Lore Entry',
+      group: 'General',
+      is_group_head: false,
+      trigger: {
+        keywords: ['new lore'],
+        trigger_rate: 100
+      },
+      prompt_area: {
+        definition: 'Enter definition here...',
+        catalog: [],
+        staff: {},
+        policy: {},
+        custom_data: {}
+      }
+    };
+
+    if (!Array.isArray(lb.lores)) lb.lores = [];
+    lb.lores.push(newLore);
+    state.collapsedLbIds.delete(lbId);
+    saveCollapsedStates();
+    selectLoreEntry(lb.id, newLore.id);
+  }
+
+  // --- TREE RENDERING (Discord Channel List Style) ---
   function renderHierarchyTree() {
+    if (!el.treeContainer) return;
+    
+    // Save scroll position before DOM update
+    state.treeScrollTop = el.treeContainer.scrollTop;
     el.treeContainer.innerHTML = '';
+
     const lorebooks = state.lorebookStore.lorebooks || [];
 
     if (lorebooks.length === 0) {
@@ -236,25 +278,33 @@
     }
 
     lorebooks.forEach(lb => {
-      const lbNode = document.createElement('div');
-      lbNode.className = `tree-lb-node ${state.selectedLbId === lb.id && !state.selectedLoreId ? 'active' : ''}`;
-      
+      const isLbCollapsed = state.collapsedLbIds.has(lb.id);
+      const isLbActive = state.selectedLbId === lb.id && !state.selectedLoreId;
+
+      const catNode = document.createElement('div');
+      catNode.className = 'tree-cat-node';
+
       const badgeClass = `badge-status-${(lb.status || 'Active').toLowerCase()}`;
-      
-      lbNode.innerHTML = `
-        <div class="lb-header-row" data-lbid="${lb.id}">
-          <div class="lb-title-group">
-            <i data-lucide="chevron-down" class="lb-chevron"></i>
-            <i data-lucide="book"></i>
-            <span class="lb-name">${lb.name || 'Untitled Lorebook'}</span>
+
+      catNode.innerHTML = `
+        <div class="discord-cat-header ${isLbCollapsed ? 'collapsed' : ''} ${isLbActive ? 'active-cat' : ''}" data-lbid="${lb.id}">
+          <div class="cat-title-left">
+            <i data-lucide="chevron-down" class="cat-chevron"></i>
+            <i data-lucide="book" class="cat-icon"></i>
+            <span class="cat-name">${lb.name || 'Untitled Lorebook'}</span>
           </div>
-          <span class="badge ${badgeClass}">${lb.status || 'Active'}</span>
+          <div class="cat-right-actions">
+            <span class="badge ${badgeClass}">${lb.status || 'Active'}</span>
+            <button class="btn-cat-add" title="Add lore under ${lb.name}">
+              <i data-lucide="plus"></i>
+            </button>
+          </div>
         </div>
       `;
 
-      // Groups & Lores
-      const loresContainer = document.createElement('div');
-      loresContainer.className = 'tree-lores-group';
+      // Group Lores Container
+      const loresGroup = document.createElement('div');
+      loresGroup.className = `discord-lores-group ${isLbCollapsed ? 'collapsed' : ''}`;
 
       const groupsMap = new Map();
       (lb.lores || []).forEach(lore => {
@@ -264,23 +314,44 @@
       });
 
       groupsMap.forEach((loresList, grpName) => {
+        const grpKey = `${lb.id}:${grpName}`;
+        const isGrpCollapsed = state.collapsedGroupKeys.has(grpKey);
+
         const grpHeader = document.createElement('div');
-        grpHeader.className = 'tree-grp-header';
-        grpHeader.innerHTML = `<i data-lucide="folder"></i> <span>Group: ${grpName}</span>`;
-        loresContainer.appendChild(grpHeader);
+        grpHeader.className = `discord-group-header ${isGrpCollapsed ? 'collapsed' : ''}`;
+        grpHeader.innerHTML = `
+          <i data-lucide="chevron-down" class="grp-chevron"></i>
+          <i data-lucide="folder" class="grp-icon"></i>
+          <span>${grpName} (${loresList.length})</span>
+        `;
+
+        grpHeader.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (state.collapsedGroupKeys.has(grpKey)) {
+            state.collapsedGroupKeys.delete(grpKey);
+          } else {
+            state.collapsedGroupKeys.add(grpKey);
+          }
+          saveCollapsedStates();
+          renderHierarchyTree();
+        });
+
+        const grpChildren = document.createElement('div');
+        grpChildren.className = `discord-group-children ${isGrpCollapsed ? 'collapsed' : ''}`;
 
         loresList.forEach(lore => {
+          const isLoreActive = state.selectedLoreId === lore.id;
           const loreItem = document.createElement('div');
-          loreItem.className = `tree-lore-item ${state.selectedLoreId === lore.id ? 'active' : ''}`;
+          loreItem.className = `discord-channel-entry ${isLoreActive ? 'active' : ''}`;
           loreItem.dataset.lbid = lb.id;
           loreItem.dataset.loreid = lore.id;
 
-          const headBadge = lore.is_group_head ? `<span class="head-badge" title="Group Head"><i data-lucide="crown"></i></span>` : '';
-          
+          const headBadge = lore.is_group_head ? `<i data-lucide="crown" class="group-head-crown" title="Group Head"></i>` : '';
+
           loreItem.innerHTML = `
-            <div class="lore-title-group">
-              <i data-lucide="file-text"></i>
-              <span>${lore.name || 'Untitled Lore'}</span>
+            <div class="channel-title-group">
+              <i data-lucide="hash" class="channel-hash-icon"></i>
+              <span class="channel-name">${lore.name || 'Untitled Lore'}</span>
               ${headBadge}
             </div>
           `;
@@ -290,26 +361,45 @@
             selectLoreEntry(lb.id, lore.id);
           });
 
-          loresContainer.appendChild(loreItem);
+          grpChildren.appendChild(loreItem);
         });
+
+        loresGroup.appendChild(grpHeader);
+        loresGroup.appendChild(grpChildren);
       });
 
-      const headerRow = lbNode.querySelector('.lb-header-row');
-      headerRow.addEventListener('click', (e) => {
-        if (e.target.classList.contains('lb-chevron') || e.target.closest('.lb-chevron')) {
+      // Category Header Event Listeners
+      const catHeader = catNode.querySelector('.discord-cat-header');
+      const btnAdd = catNode.querySelector('.btn-cat-add');
+
+      if (btnAdd) {
+        btnAdd.addEventListener('click', (e) => {
           e.stopPropagation();
-          headerRow.classList.toggle('collapsed');
-          loresContainer.classList.toggle('collapsed');
-          return;
+          addLoreUnderLb(lb.id);
+        });
+      }
+
+      catHeader.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-cat-add')) return;
+        
+        // Toggle collapse state
+        if (state.collapsedLbIds.has(lb.id)) {
+          state.collapsedLbIds.delete(lb.id);
+        } else {
+          state.collapsedLbIds.add(lb.id);
         }
+        saveCollapsedStates();
         selectLorebook(lb.id);
       });
 
-      lbNode.appendChild(loresContainer);
-      el.treeContainer.appendChild(lbNode);
+      catNode.appendChild(loresGroup);
+      el.treeContainer.appendChild(catNode);
     });
 
     if (window.lucide) window.lucide.createIcons();
+
+    // Restore scroll position
+    el.treeContainer.scrollTop = state.treeScrollTop;
   }
 
   // --- SELECTION & EDITOR MANAGERS ---
@@ -761,6 +851,15 @@
     });
 
     // Auth Key Handling & Modal
+    const btnQuickAuth = document.getElementById('btnQuickAuth');
+    if (btnQuickAuth) {
+      btnQuickAuth.addEventListener('click', () => {
+        if (el.inputAuthKeyModal) el.inputAuthKeyModal.value = state.authKey || '';
+        if (el.authErrorMessage) el.authErrorMessage.classList.add('hidden');
+        if (el.authModal) el.authModal.classList.remove('hidden');
+      });
+    }
+
     if (el.btnAuthSettings) {
       el.btnAuthSettings.addEventListener('click', () => {
         if (el.inputAuthKeyModal) el.inputAuthKeyModal.value = state.authKey || '';
