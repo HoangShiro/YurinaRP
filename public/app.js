@@ -8,8 +8,10 @@
   const state = {
     authKey: localStorage.getItem('CLIENT_AUTH_KEY') || '',
     lorebookStore: { lorebooks: [] },
+    systemPromptStore: { system_prompt: '', features: { fixFormat: true, autoLineBreak: true }, shorter_rules: [], keyremind_rules: [], trigger_rules: [] },
     selectedLbId: null,
     selectedLoreId: null,
+    selectedSpItem: 'sp_base',
     currentSubTab: 'definition',
     collapsedLbIds: new Set(JSON.parse(localStorage.getItem('yuri_collapsed_lbs') || '[]')),
     collapsedGroupKeys: new Set(JSON.parse(localStorage.getItem('yuri_collapsed_groups') || '[]')),
@@ -39,6 +41,41 @@
 
     // Tree
     treeContainer: document.getElementById('treeContainer'),
+
+    // System Prompt Elements
+    spTreeContainer: document.getElementById('spTreeContainer'),
+    btnAddSpRule: document.getElementById('btnAddSpRule'),
+    spBaseView: document.getElementById('spBaseView'),
+    spFeaturesView: document.getElementById('spFeaturesView'),
+    spRuleEditorView: document.getElementById('spRuleEditorView'),
+    spEmptyView: document.getElementById('spEmptyView'),
+
+    spBasePromptInput: document.getElementById('spBasePromptInput'),
+    btnSaveSpBase: document.getElementById('btnSaveSpBase'),
+
+    spToggleFixFormat: document.getElementById('spToggleFixFormat'),
+    spToggleAutoLineBreak: document.getElementById('spToggleAutoLineBreak'),
+    btnSaveSpFeatures: document.getElementById('btnSaveSpFeatures'),
+
+    spRuleTitle: document.getElementById('spRuleTitle'),
+    spRuleSubtitle: document.getElementById('spRuleSubtitle'),
+    spRuleEnabledCheckbox: document.getElementById('spRuleEnabledCheckbox'),
+    spRuleNameInput: document.getElementById('spRuleNameInput'),
+    spRuleTypeSelect: document.getElementById('spRuleTypeSelect'),
+
+    spParamsShorter: document.getElementById('spParamsShorter'),
+    spParamsKeyremind: document.getElementById('spParamsKeyremind'),
+    spParamsTrigger: document.getElementById('spParamsTrigger'),
+
+    spParamMaxLength: document.getElementById('spParamMaxLength'),
+    spParamKey: document.getElementById('spParamKey'),
+    spParamKeywords: document.getElementById('spParamKeywords'),
+    spParamDepth: document.getElementById('spParamDepth'),
+    spParamInsertion: document.getElementById('spParamInsertion'),
+
+    spRulePromptInput: document.getElementById('spRulePromptInput'),
+    btnSaveSpRule: document.getElementById('btnSaveSpRule'),
+    btnDeleteSpRule: document.getElementById('btnDeleteSpRule'),
 
     // Views
     lorebookEditorView: document.getElementById('lorebookEditorView'),
@@ -145,6 +182,7 @@
     if (el.pageTitle) {
       const titles = {
         lorebooks: 'Lorebook Database Management',
+        systemprompt: 'System Prompt & Prompt Rules Management',
         simulator: 'Context Simulation & Dry-Run Engine',
         worldstate: 'World State & Financial Ledger',
         settings: 'Authentication & System Audit Log'
@@ -214,6 +252,38 @@
       renderHierarchyTree();
     } catch (err) {
       log(`Failed to fetch LorebookStore: ${err.message}`, 'error');
+    }
+  }
+
+  async function loadSystemPromptStore() {
+    try {
+      log('Fetching SystemPromptStore from server...', 'info');
+      const res = await fetch('/v1/system-prompt', { headers: getHeaders() });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      if (data && data.store) {
+        state.systemPromptStore = data.store;
+        log('Loaded System Prompt & Rules successfully.', 'success');
+      }
+      renderSystemPromptTree();
+    } catch (err) {
+      log(`Failed to fetch SystemPromptStore: ${err.message}`, 'error');
+    }
+  }
+
+  async function saveSystemPromptStore() {
+    try {
+      log('Saving SystemPromptStore to Upstash...', 'info');
+      const res = await fetch('/v1/system-prompt', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(state.systemPromptStore)
+      });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      log('System Prompt & Rules saved successfully to Upstash Redis!', 'success');
+    } catch (err) {
+      log(`Failed to save SystemPromptStore: ${err.message}`, 'error');
+      alert(`Save failed: ${err.message}`);
     }
   }
 
@@ -400,6 +470,195 @@
 
     // Restore scroll position
     el.treeContainer.scrollTop = state.treeScrollTop;
+  }
+
+  // --- SYSTEM PROMPT TREE & EDITOR MANAGERS ---
+  function renderSystemPromptTree() {
+    if (!el.spTreeContainer) return;
+
+    const store = state.systemPromptStore || {};
+    const shorterRules = store.shorter_rules || [];
+    const keyremindRules = store.keyremind_rules || [];
+    const triggerRules = store.trigger_rules || [];
+
+    let html = '';
+
+    // Base System Prompt Item
+    const isBaseActive = state.selectedSpItem === 'sp_base' ? 'active' : '';
+    html += `
+      <div class="tree-item tree-channel ${isBaseActive}" data-sp-item="sp_base">
+        <i data-lucide="terminal" class="tree-icon text-accent"></i>
+        <span class="tree-label">Base System Prompt</span>
+      </div>
+    `;
+
+    // Feature Switches Item
+    const isFeaturesActive = state.selectedSpItem === 'sp_features' ? 'active' : '';
+    html += `
+      <div class="tree-item tree-channel ${isFeaturesActive}" data-sp-item="sp_features">
+        <i data-lucide="sliders" class="tree-icon text-info"></i>
+        <span class="tree-label">Global Formatting Features</span>
+      </div>
+    `;
+
+    // Shorter Rules Group
+    html += `
+      <div class="tree-group mt-3">
+        <div class="tree-group-header">
+          <i data-lucide="scissors" class="group-icon"></i>
+          <span class="group-title">Shorter Rules (${shorterRules.length})</span>
+        </div>
+        <div class="tree-group-children">
+    `;
+    if (shorterRules.length === 0) {
+      html += `<div class="text-sub px-4 py-1 text-xs">No shorter rules</div>`;
+    } else {
+      shorterRules.forEach(r => {
+        const isActive = state.selectedSpItem === r.id ? 'active' : '';
+        const offBadge = r.enabled === false ? ' <span class="badge badge-off">Off</span>' : '';
+        html += `
+          <div class="tree-item tree-lore ${isActive}" data-sp-item="${r.id}">
+            <i data-lucide="scissors" class="tree-icon text-warning"></i>
+            <span class="tree-label">${escapeHtml(r.name || 'Shorter Rule')}${offBadge}</span>
+          </div>
+        `;
+      });
+    }
+    html += `</div></div>`;
+
+    // KeyRemind Rules Group
+    html += `
+      <div class="tree-group mt-2">
+        <div class="tree-group-header">
+          <i data-lucide="bell" class="group-icon"></i>
+          <span class="group-title">KeyRemind Rules (${keyremindRules.length})</span>
+        </div>
+        <div class="tree-group-children">
+    `;
+    if (keyremindRules.length === 0) {
+      html += `<div class="text-sub px-4 py-1 text-xs">No keyword reminder rules</div>`;
+    } else {
+      keyremindRules.forEach(r => {
+        const isActive = state.selectedSpItem === r.id ? 'active' : '';
+        const offBadge = r.enabled === false ? ' <span class="badge badge-off">Off</span>' : '';
+        html += `
+          <div class="tree-item tree-lore ${isActive}" data-sp-item="${r.id}">
+            <i data-lucide="bell" class="tree-icon text-purple"></i>
+            <span class="tree-label">${escapeHtml(r.name || 'KeyRemind Rule')}${offBadge}</span>
+          </div>
+        `;
+      });
+    }
+    html += `</div></div>`;
+
+    // Keyword Trigger Rules Group
+    html += `
+      <div class="tree-group mt-2">
+        <div class="tree-group-header">
+          <i data-lucide="zap" class="group-icon"></i>
+          <span class="group-title">Trigger Rules (${triggerRules.length})</span>
+        </div>
+        <div class="tree-group-children">
+    `;
+    if (triggerRules.length === 0) {
+      html += `<div class="text-sub px-4 py-1 text-xs">No trigger rules</div>`;
+    } else {
+      triggerRules.forEach(r => {
+        const isActive = state.selectedSpItem === r.id ? 'active' : '';
+        const offBadge = r.enabled === false ? ' <span class="badge badge-off">Off</span>' : '';
+        html += `
+          <div class="tree-item tree-lore ${isActive}" data-sp-item="${r.id}">
+            <i data-lucide="zap" class="tree-icon text-success"></i>
+            <span class="tree-label">${escapeHtml(r.name || 'Trigger Rule')}${offBadge}</span>
+          </div>
+        `;
+      });
+    }
+    html += `</div></div>`;
+
+    el.spTreeContainer.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+
+    el.spTreeContainer.querySelectorAll('[data-sp-item]').forEach(item => {
+      item.addEventListener('click', () => selectSpItem(item.dataset.spItem));
+    });
+  }
+
+  function selectSpItem(itemId) {
+    state.selectedSpItem = itemId;
+    renderSystemPromptTree();
+
+    if (!el.spBaseView) return;
+
+    el.spBaseView.classList.add('hidden');
+    el.spFeaturesView.classList.add('hidden');
+    el.spRuleEditorView.classList.add('hidden');
+    el.spEmptyView.classList.add('hidden');
+
+    const store = state.systemPromptStore || {};
+
+    if (itemId === 'sp_base') {
+      el.spBaseView.classList.remove('hidden');
+      if (el.spBasePromptInput) {
+        el.spBasePromptInput.value = store.system_prompt || '';
+      }
+      return;
+    }
+
+    if (itemId === 'sp_features') {
+      el.spFeaturesView.classList.remove('hidden');
+      if (el.spToggleFixFormat) el.spToggleFixFormat.checked = !!store.features?.fixFormat;
+      if (el.spToggleAutoLineBreak) el.spToggleAutoLineBreak.checked = !!store.features?.autoLineBreak;
+      return;
+    }
+
+    let foundRule = null;
+    let ruleType = 'shorter';
+
+    if (Array.isArray(store.shorter_rules)) {
+      foundRule = store.shorter_rules.find(r => r.id === itemId);
+      if (foundRule) ruleType = 'shorter';
+    }
+    if (!foundRule && Array.isArray(store.keyremind_rules)) {
+      foundRule = store.keyremind_rules.find(r => r.id === itemId);
+      if (foundRule) ruleType = 'keyremind';
+    }
+    if (!foundRule && Array.isArray(store.trigger_rules)) {
+      foundRule = store.trigger_rules.find(r => r.id === itemId);
+      if (foundRule) ruleType = 'trigger';
+    }
+
+    if (foundRule) {
+      el.spRuleEditorView.classList.remove('hidden');
+      if (el.spRuleTitle) el.spRuleTitle.textContent = foundRule.name || 'Edit Rule';
+      if (el.spRuleSubtitle) el.spRuleSubtitle.textContent = `ID: ${foundRule.id}`;
+      if (el.spRuleEnabledCheckbox) el.spRuleEnabledCheckbox.checked = foundRule.enabled !== false;
+      if (el.spRuleNameInput) el.spRuleNameInput.value = foundRule.name || '';
+      if (el.spRuleTypeSelect) el.spRuleTypeSelect.value = ruleType;
+      if (el.spRulePromptInput) el.spRulePromptInput.value = foundRule.prompt || '';
+
+      updateSpParamVisibility(ruleType);
+
+      if (ruleType === 'shorter' && el.spParamMaxLength) {
+        el.spParamMaxLength.value = Number(foundRule.max_length || foundRule.length) || 500;
+      } else if (ruleType === 'keyremind' && el.spParamKey) {
+        el.spParamKey.value = foundRule.key || '';
+      } else if (ruleType === 'trigger') {
+        if (el.spParamKeywords) {
+          el.spParamKeywords.value = Array.isArray(foundRule.keywords) ? foundRule.keywords.join(', ') : (foundRule.keywords || '');
+        }
+        if (el.spParamDepth) el.spParamDepth.value = Number(foundRule.depth_scan) || 2;
+        if (el.spParamInsertion) el.spParamInsertion.value = foundRule.insertion || 'context';
+      }
+    } else {
+      el.spEmptyView.classList.remove('hidden');
+    }
+  }
+
+  function updateSpParamVisibility(ruleType) {
+    if (el.spParamsShorter) el.spParamsShorter.classList.toggle('hidden', ruleType !== 'shorter');
+    if (el.spParamsKeyremind) el.spParamsKeyremind.classList.toggle('hidden', ruleType !== 'keyremind');
+    if (el.spParamsTrigger) el.spParamsTrigger.classList.toggle('hidden', ruleType !== 'trigger');
   }
 
   // --- SELECTION & EDITOR MANAGERS ---
@@ -1016,6 +1275,104 @@
         await verifyAuthKey(candidate);
       });
     }
+
+    // System Prompt & Rules Event Handlers
+    if (el.spRuleTypeSelect) {
+      el.spRuleTypeSelect.addEventListener('change', (e) => {
+        updateSpParamVisibility(e.target.value);
+      });
+    }
+
+    if (el.btnSaveSpBase) {
+      el.btnSaveSpBase.addEventListener('click', async () => {
+        state.systemPromptStore.system_prompt = el.spBasePromptInput.value.trim();
+        await saveSystemPromptStore();
+      });
+    }
+
+    if (el.btnSaveSpFeatures) {
+      el.btnSaveSpFeatures.addEventListener('click', async () => {
+        state.systemPromptStore.features = {
+          fixFormat: !!el.spToggleFixFormat.checked,
+          autoLineBreak: !!el.spToggleAutoLineBreak.checked
+        };
+        await saveSystemPromptStore();
+      });
+    }
+
+    if (el.btnSaveSpRule) {
+      el.btnSaveSpRule.addEventListener('click', async () => {
+        const ruleId = state.selectedSpItem;
+        if (!ruleId || ruleId === 'sp_base' || ruleId === 'sp_features') return;
+
+        const store = state.systemPromptStore;
+        let ruleType = el.spRuleTypeSelect.value;
+        
+        store.shorter_rules = (store.shorter_rules || []).filter(r => r.id !== ruleId);
+        store.keyremind_rules = (store.keyremind_rules || []).filter(r => r.id !== ruleId);
+        store.trigger_rules = (store.trigger_rules || []).filter(r => r.id !== ruleId);
+
+        const updatedRule = {
+          id: ruleId,
+          name: el.spRuleNameInput.value.trim() || 'Untitled Rule',
+          enabled: el.spRuleEnabledCheckbox.checked,
+          prompt: el.spRulePromptInput.value.trim()
+        };
+
+        if (ruleType === 'shorter') {
+          updatedRule.max_length = Number(el.spParamMaxLength.value) || 500;
+          store.shorter_rules.push(updatedRule);
+        } else if (ruleType === 'keyremind') {
+          updatedRule.key = el.spParamKey.value.trim();
+          store.keyremind_rules.push(updatedRule);
+        } else if (ruleType === 'trigger') {
+          updatedRule.keywords = el.spParamKeywords.value.split(',').map(k => k.trim()).filter(Boolean);
+          updatedRule.depth_scan = Number(el.spParamDepth.value) || 2;
+          updatedRule.insertion = el.spParamInsertion.value || 'context';
+          store.trigger_rules.push(updatedRule);
+        }
+
+        await saveSystemPromptStore();
+        renderSystemPromptTree();
+        selectSpItem(ruleId);
+      });
+    }
+
+    if (el.btnDeleteSpRule) {
+      el.btnDeleteSpRule.addEventListener('click', async () => {
+        const ruleId = state.selectedSpItem;
+        if (!ruleId || ruleId === 'sp_base' || ruleId === 'sp_features') return;
+        if (!confirm('Are you sure you want to delete this prompt rule?')) return;
+
+        const store = state.systemPromptStore;
+        store.shorter_rules = (store.shorter_rules || []).filter(r => r.id !== ruleId);
+        store.keyremind_rules = (store.keyremind_rules || []).filter(r => r.id !== ruleId);
+        store.trigger_rules = (store.trigger_rules || []).filter(r => r.id !== ruleId);
+
+        await saveSystemPromptStore();
+        selectSpItem('sp_base');
+      });
+    }
+
+    if (el.btnAddSpRule) {
+      el.btnAddSpRule.addEventListener('click', async () => {
+        const newId = `rule_${Date.now()}`;
+        const newRule = {
+          id: newId,
+          name: 'New Prompt Rule',
+          enabled: true,
+          max_length: 500,
+          prompt: '[Rule Prompt]: ...'
+        };
+        if (!Array.isArray(state.systemPromptStore.shorter_rules)) {
+          state.systemPromptStore.shorter_rules = [];
+        }
+        state.systemPromptStore.shorter_rules.push(newRule);
+        await saveSystemPromptStore();
+        renderSystemPromptTree();
+        selectSpItem(newId);
+      });
+    }
   }
 
   // --- INITIALIZATION ---
@@ -1024,6 +1381,8 @@
     const isAuth = await verifyAuthKey(state.authKey);
     if (isAuth) {
       loadLorebookStore();
+      loadSystemPromptStore();
+      selectSpItem('sp_base');
     }
   }
 

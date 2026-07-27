@@ -12,6 +12,7 @@ const { timingSafeEqual } = require('crypto');
 const { processEventTriggers } = require('./scripts/eventTriggers');
 const { applyAutoLineBreak, fixTextFormatting, StreamTextProcessor } = require('./scripts/formatFixer');
 const { fetchRemoteLorebookStore, saveRemoteLorebookStore, fetchRemoteLorebook, saveRemoteLorebook } = require('./scripts/upstashLorebook');
+const { fetchRemoteSystemPromptStore, saveRemoteSystemPromptStore } = require('./scripts/upstashSystemPrompt');
 const { compileLorebookStore, extractCurrentDay } = require('./scripts/lorebookCompiler');
 const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/worldStateEngine');
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
@@ -476,6 +477,41 @@ app.post('/v1/lorebooks/import', async (req, res) => {
   }
 });
 
+// ─── System Prompt & Rules Store Routes ──────────────────────────────────────
+
+app.get('/v1/system-prompt', async (req, res) => {
+  try {
+    const store = await fetchRemoteSystemPromptStore();
+    res.json({ status: 'ok', store });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'system_prompt_fetch_error' } });
+  }
+});
+
+app.post('/v1/system-prompt', async (req, res) => {
+  try {
+    const storeData = req.body?.store || req.body;
+    if (!storeData || typeof storeData !== 'object') {
+      return res.status(400).json({ error: { message: 'Invalid payload. Payload must be a JSON object.', type: 'invalid_request_error' } });
+    }
+    const result = await saveRemoteSystemPromptStore(storeData);
+    res.json({ status: 'ok', message: 'System Prompt Store saved successfully to Upstash Redis', result });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'system_prompt_save_error' } });
+  }
+});
+
+app.get('/v1/system-prompt/export', async (req, res) => {
+  try {
+    const store = await fetchRemoteSystemPromptStore();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="system_prompt_store.json"');
+    res.send(JSON.stringify(store, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'system_prompt_export_error' } });
+  }
+});
+
 // Legacy backward compatibility route
 app.get('/v1/lorebook', async (req, res) => {
   try {
@@ -601,8 +637,21 @@ app.post('/v1/chat/completions', async (req, res) => {
     const worldState = await processWorldStateTick(messages);
     const worldSnapshot = compileWorldStateSnapshot(worldState);
 
-    // 2. Fetch Tiered LorebookStore and compile dynamic context
+    // 2. Fetch System Prompt Store & Tiered LorebookStore
+    const systemPromptStore = await fetchRemoteSystemPromptStore();
     const lorebookStore = await fetchRemoteLorebookStore();
+
+    // Prepend base system prompt if configured
+    if (systemPromptStore && systemPromptStore.system_prompt && Array.isArray(messages) && messages.length > 0) {
+      if (messages[0].role === 'system') {
+        if (typeof messages[0].content === 'string' && !messages[0].content.includes(systemPromptStore.system_prompt)) {
+          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
+        }
+      } else {
+        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
+      }
+    }
+
     const compiledLore = compileLorebookStore(lorebookStore, messages);
 
     const contextParts = [worldSnapshot];
@@ -637,7 +686,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       fixFormat,
       autoLineBreak,
       triggeredPrompts
-    } = processEventTriggers(messages);
+    } = processEventTriggers(messages, systemPromptStore);
 
     if (triggeredPrompts.length > 0) {
       console.log(`[PROXY] Activated ${triggeredPrompts.length} event trigger prompt(s)`);

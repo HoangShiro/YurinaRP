@@ -1,4 +1,4 @@
-// eventTriggers.js — Event Trigger Parser & HTML Tag Cleaner for NIM Proxy
+// eventTriggers.js — Event Trigger Evaluator & HTML Tag Cleaner for NIM Proxy
 
 /**
  * Cleans HTML trigger tags from text content.
@@ -38,27 +38,68 @@ function getMsgText(msg) {
 }
 
 /**
- * Parses event triggers (<shorter>, <keyremind>, <lorebook>) and feature flags (<fixformat>, <autolinebreak>)
- * from the request messages. Strips all these HTML tags from context.
- * Evaluates trigger conditions and appends/inserts triggered prompts to target locations.
+ * Evaluates triggers from System Prompt Store (JSON) as well as legacy HTML tags in messages.
+ * Strips all HTML tags from message context.
  */
-function processEventTriggers(messages) {
+function processEventTriggers(messages, systemPromptStore = null) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return { messages: messages || [], fixFormat: false, autoLineBreak: false, triggeredPrompts: [] };
   }
 
-  let fixFormat = false;
-  let autoLineBreak = false;
+  let fixFormat = systemPromptStore?.features?.fixFormat ?? false;
+  let autoLineBreak = systemPromptStore?.features?.autoLineBreak ?? false;
+
   const shorterRules = [];
   const keyremindRules = [];
-  const lorebookRules = [];
+  const triggerRules = [];
 
-  // Step 1: Scan for tags across all messages
+  // Load rules from systemPromptStore (JSON)
+  if (systemPromptStore) {
+    if (Array.isArray(systemPromptStore.shorter_rules)) {
+      systemPromptStore.shorter_rules.forEach(r => {
+        if (r && r.enabled !== false && r.prompt) {
+          shorterRules.push({
+            length: Number(r.max_length || r.length) || 500,
+            prompt: r.prompt
+          });
+        }
+      });
+    }
+
+    if (Array.isArray(systemPromptStore.keyremind_rules)) {
+      systemPromptStore.keyremind_rules.forEach(r => {
+        if (r && r.enabled !== false && r.key && r.prompt) {
+          keyremindRules.push({
+            key: r.key,
+            prompt: r.prompt
+          });
+        }
+      });
+    }
+
+    if (Array.isArray(systemPromptStore.trigger_rules)) {
+      systemPromptStore.trigger_rules.forEach(r => {
+        if (r && r.enabled !== false && r.prompt) {
+          const kws = Array.isArray(r.keywords) ? r.keywords : (r.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+          if (kws.length > 0) {
+            triggerRules.push({
+              depth_scan: Number(r.depth_scan) || 2,
+              insertion: r.insertion || 'context',
+              keywords: kws,
+              prompt: r.prompt
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // Step 1: Scan for legacy HTML tags across all messages (fallback compatibility)
   messages.forEach(msg => {
     const text = getMsgText(msg);
     if (!text) return;
 
-    // Scan <fixformat>
+    // Legacy <fixformat>
     const fixMatches = text.match(/<fixformat>([\s\S]*?)<\/fixformat>/gi);
     if (fixMatches) {
       fixMatches.forEach(m => {
@@ -67,7 +108,7 @@ function processEventTriggers(messages) {
       });
     }
 
-    // Scan <autolinebreak>
+    // Legacy <autolinebreak>
     const autoLbMatches = text.match(/<autolinebreak>([\s\S]*?)<\/autolinebreak>/gi);
     if (autoLbMatches) {
       autoLbMatches.forEach(m => {
@@ -76,7 +117,7 @@ function processEventTriggers(messages) {
       });
     }
 
-    // Scan <shorter>
+    // Legacy <shorter>
     const shorterMatches = text.match(/<shorter[\s\S]*?<\/shorter>/gi);
     if (shorterMatches) {
       shorterMatches.forEach(block => {
@@ -91,7 +132,7 @@ function processEventTriggers(messages) {
       });
     }
 
-    // Scan <keyremind>
+    // Legacy <keyremind>
     const keyremindMatches = text.match(/<keyremind[\s\S]*?<\/keyremind>/gi);
     if (keyremindMatches) {
       keyremindMatches.forEach(block => {
@@ -113,7 +154,7 @@ function processEventTriggers(messages) {
       });
     }
 
-    // Scan <lorebook>
+    // Legacy <lorebook>
     const lorebookMatches = text.match(/<lorebook[\s\S]*?<\/lorebook>/gi);
     if (lorebookMatches) {
       lorebookMatches.forEach(lorebookBlock => {
@@ -144,7 +185,7 @@ function processEventTriggers(messages) {
           const keywords = rawKw.split(',').map(k => k.trim()).filter(Boolean);
 
           if (keywords.length > 0 && pItem.prompt) {
-            lorebookRules.push({
+            triggerRules.push({
               depth_scan,
               insertion,
               keywords,
@@ -188,7 +229,7 @@ function processEventTriggers(messages) {
   const triggeredUserPrompts = [];
   const triggeredContextPrompts = [];
 
-  // Evaluate <shorter>
+  // Evaluate shorter rules
   if (shorterRules.length > 0 && lastAssistantMsgText) {
     const charCount = lastAssistantMsgText.replace(/[\s\r\n]/g, '').length;
     shorterRules.forEach(rule => {
@@ -198,7 +239,7 @@ function processEventTriggers(messages) {
     });
   }
 
-  // Evaluate <keyremind>
+  // Evaluate keyremind rules
   if (keyremindRules.length > 0 && lastAssistantMsgText) {
     keyremindRules.forEach(rule => {
       if (!lastAssistantMsgText.includes(rule.key)) {
@@ -207,10 +248,9 @@ function processEventTriggers(messages) {
     });
   }
 
-  // Evaluate <lorebook>
-  if (lorebookRules.length > 0) {
-    lorebookRules.forEach(rule => {
-      // Collect last `depth_scan` user messages and `depth_scan` assistant messages
+  // Evaluate trigger rules
+  if (triggerRules.length > 0) {
+    triggerRules.forEach(rule => {
       let userCount = 0;
       let assistantCount = 0;
       const scannedTexts = [];

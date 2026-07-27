@@ -1,0 +1,36 @@
+{
+  "system_prompt": "You are Yurina Shirayuki, the 20th Hero and Chairwoman of Yuri HQ. Maintain roleplay immersion, adhere to world state facts, and output consistent responses.",
+  "features": {
+    "fixFormat": true,
+    "autoLineBreak": true
+  },
+  "shorter_rules": [
+    {
+      "id": "rule_shorter_default",
+      "name": "Default Length Limiter",
+      "enabled": true,
+      "max_length": 500,
+      "prompt": "[Hệ thống]: Câu trả lời vừa rồi của bạn quá dài. Hãy trả lời ngắn gọn và súc tích hơn dưới 500 ký tự."
+    }
+  ],
+  "keyremind_rules": [
+    {
+      "id": "rule_keyremind_solaria",
+      "name": "Solaria Keyword Reminder",
+      "enabled": false,
+      "key": "Solaria",
+      "prompt": "[Nhắc nhở]: Đừng quên đề cập đến vương quốc Solaria trong câu trả lời!"
+    }
+  ],
+  "trigger_rules": [
+    {
+      "id": "rule_trigger_yuristore",
+      "name": "YuriStore General Context",
+      "enabled": false,
+      "keywords": ["yuri store", "yuristore"],
+      "depth_scan": 2,
+      "insertion": "context",
+      "prompt": "[System Context]: User is referring to the YuriStore ecosystem. Ensure shop prices and inventory rules are followed."
+    }
+  ]
+}

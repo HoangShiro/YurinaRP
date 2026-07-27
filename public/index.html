@@ -34,6 +34,13 @@
           </div>
         </div>
 
+        <div class="rail-item nav-item" data-tab="systemprompt" data-tooltip="System Prompt & Rules">
+          <div class="rail-pill"></div>
+          <div class="rail-icon">
+            <i data-lucide="sliders"></i>
+          </div>
+        </div>
+
         <div class="rail-item nav-item" data-tab="simulator" data-tooltip="Context Simulator">
           <div class="rail-pill"></div>
           <div class="rail-icon">
@@ -343,6 +350,203 @@
               <div class="empty-icon"><i data-lucide="book-open"></i></div>
               <h3>No Lorebook or Lore Entry Selected</h3>
               <p class="text-sub">Select an item from the left hierarchy tree to inspect and edit details.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: SYSTEM PROMPT & RULES MANAGER -->
+      <section class="tab-page" id="page-systemprompt">
+        <div class="workspace-grid">
+          <!-- Hierarchy Tree Sidebar -->
+          <div class="card glass tree-card discord-channel-tree">
+            <div class="card-header tree-card-header">
+              <div class="tree-header-title">
+                <i data-lucide="sliders" class="header-icon"></i>
+                <h3>System Rules & Prompt</h3>
+              </div>
+              <div class="tree-header-actions">
+                <button class="btn btn-primary btn-xs" id="btnAddSpRule" title="Create New Prompt Rule">
+                  <i data-lucide="plus"></i> New Rule
+                </button>
+              </div>
+            </div>
+            <div class="card-body tree-card-body">
+              <div class="tree-container discord-channels-container" id="spTreeContainer">
+                <!-- Dynamically populated system prompt tree -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Workspace / Editor -->
+          <div class="card glass editor-card">
+            <!-- 1. Base System Prompt View -->
+            <div id="spBaseView" class="editor-view hidden">
+              <div class="card-header border-b">
+                <div>
+                  <h3>Base System Prompt</h3>
+                  <span class="card-subtitle">Global character roleplay & systemic persona instructions</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label for="spBasePromptInput">System Prompt Content:</label>
+                  <textarea id="spBasePromptInput" class="form-textarea code-font" rows="12" placeholder="Enter base system prompt instructions..."></textarea>
+                </div>
+                <div class="editor-actions mt-6">
+                  <button class="btn btn-success" id="btnSaveSpBase">
+                    <i data-lucide="check"></i> Save System Prompt
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Feature Switches View -->
+            <div id="spFeaturesView" class="editor-view hidden">
+              <div class="card-header border-b">
+                <div>
+                  <h3>Global Formatting Features</h3>
+                  <span class="card-subtitle">Automated LLM response stream formatting handlers</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="feature-toggle-card card glass p-4 mb-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h4 class="font-semibold text-lg"><i data-lucide="wand-2"></i> Auto Fix Format (&lt;fixformat&gt;)</h4>
+                      <p class="text-sub text-sm">Automatically detects and closes missing quotes, brackets, and markdown tags in LLM responses.</p>
+                    </div>
+                    <label class="toggle-checkbox">
+                      <input type="checkbox" id="spToggleFixFormat">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="feature-toggle-card card glass p-4 mt-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h4 class="font-semibold text-lg"><i data-lucide="wrap-text"></i> Auto Line Break (&lt;autolinebreak&gt;)</h4>
+                      <p class="text-sub text-sm">Inserts double line breaks (\n\n) between distinct roleplay elements like actions (*...*), dialogues ("..."), and scene breaks (---).</p>
+                    </div>
+                    <label class="toggle-checkbox">
+                      <input type="checkbox" id="spToggleAutoLineBreak">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="editor-actions mt-6">
+                  <button class="btn btn-success" id="btnSaveSpFeatures">
+                    <i data-lucide="check"></i> Apply Feature Settings
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Rule Editor View -->
+            <div id="spRuleEditorView" class="editor-view hidden">
+              <div class="card-header border-b">
+                <div>
+                  <h3 id="spRuleTitle">Edit Prompt Rule</h3>
+                  <span class="card-subtitle" id="spRuleSubtitle">Rule Type: N/A</span>
+                </div>
+                <div class="head-toggle-wrapper">
+                  <label class="toggle-checkbox">
+                    <input type="checkbox" id="spRuleEnabledCheckbox" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label"><i data-lucide="power"></i> Enable Rule</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="spRuleNameInput">Rule Name:</label>
+                    <input type="text" id="spRuleNameInput" class="form-input" placeholder="e.g. Length Limit 500">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="spRuleTypeSelect">Rule Type:</label>
+                    <select id="spRuleTypeSelect" class="form-select">
+                      <option value="shorter">Shorter Response Trigger (&lt;shorter&gt;)</option>
+                      <option value="keyremind">Keyword Reminder Trigger (&lt;keyremind&gt;)</option>
+                      <option value="trigger">Keyword Context Trigger (&lt;lorebook&gt;)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Type-Specific Parameters Box -->
+                <div class="trigger-box card glass mt-4">
+                  <div class="card-header-sm">
+                    <h4><i data-lucide="zap"></i> Rule Trigger Conditions</h4>
+                  </div>
+                  
+                  <!-- Shorter Params -->
+                  <div id="spParamsShorter" class="rule-param-group mt-2">
+                    <div class="form-group">
+                      <label for="spParamMaxLength">Max Assistant Character Length:</label>
+                      <input type="number" id="spParamMaxLength" min="50" value="500" class="form-input">
+                      <span class="form-help">Triggers prompt if previous assistant message exceeds this character length (excluding spaces).</span>
+                    </div>
+                  </div>
+
+                  <!-- KeyRemind Params -->
+                  <div id="spParamsKeyremind" class="rule-param-group hidden mt-2">
+                    <div class="form-group">
+                      <label for="spParamKey">Required Keyword in Assistant Response:</label>
+                      <input type="text" id="spParamKey" class="form-input" placeholder="e.g. Solaria">
+                      <span class="form-help">Triggers prompt if previous assistant message DOES NOT contain this keyword.</span>
+                    </div>
+                  </div>
+
+                  <!-- Trigger Params -->
+                  <div id="spParamsTrigger" class="rule-param-group hidden mt-2">
+                    <div class="form-grid">
+                      <div class="form-group">
+                        <label for="spParamKeywords">Trigger Keywords (Comma separated):</label>
+                        <input type="text" id="spParamKeywords" class="form-input" placeholder="yuristore, retail shop">
+                      </div>
+
+                      <div class="form-group">
+                        <label for="spParamDepth">Depth Scan (Recent Message Pairs):</label>
+                        <input type="number" id="spParamDepth" min="1" max="10" value="2" class="form-input">
+                      </div>
+
+                      <div class="form-group">
+                        <label for="spParamInsertion">Insertion Target:</label>
+                        <select id="spParamInsertion" class="form-select">
+                          <option value="context">System Context (After System Prompt)</option>
+                          <option value="user_msg">User Message (Append to end of request)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Prompt Textarea -->
+                <div class="form-group mt-6">
+                  <label for="spRulePromptInput">Triggered Prompt Text:</label>
+                  <textarea id="spRulePromptInput" class="form-textarea code-font" rows="5" placeholder="Enter the prompt to insert when this rule is triggered..."></textarea>
+                </div>
+
+                <div class="editor-actions mt-6">
+                  <button class="btn btn-success" id="btnSaveSpRule">
+                    <i data-lucide="check"></i> Save Rule
+                  </button>
+                  <button class="btn btn-danger btn-outline" id="btnDeleteSpRule">
+                    <i data-lucide="trash-2"></i> Delete Rule
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty State View -->
+            <div id="spEmptyView" class="editor-view text-center py-16">
+              <div class="empty-icon"><i data-lucide="sliders"></i></div>
+              <h3>No System Prompt Item Selected</h3>
+              <p class="text-sub">Select Base System Prompt, Global Features, or a Prompt Rule from the left sidebar.</p>
             </div>
           </div>
         </div>
