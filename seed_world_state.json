@@ -1,0 +1,276 @@
+{
+  "meta": {
+    "world_name": "Stagaia",
+    "current_day": 242,
+    "last_updated_day": 242,
+    "hero_era": "Post-Yuri Era (20th Hero: Yurina Shirayuki)",
+    "currency_units": {
+      "1_copper": 1,
+      "1_silver": 100,
+      "1_gold": 10000,
+      "1_platinum": 1000000
+    },
+    "timeline_summary": "Day 1: Yurina summoned; Day 12: YuriStore Grand Opening & Crown Accord; Day 16: Carmilla Accord & Pope Peace; Day 23: Production Complex & Staff Apartments; Day 190: Executive Board formed; Day 214-230: Holo Orb & YuriAerial launched; Day 242: Consolidated Audit."
+  },
+  "organizations": {
+    "yuri_systems": {
+      "name": "Yuri Systems",
+      "founder": "Yurina Shirayuki (20th Hero)",
+      "type": "Continental Corporate Conglomerate",
+      "structure": ["YuriHQ", "YuriStore", "YuriBank", "YuriCharity"],
+      "headquarters": "Sector 4, Commercial Ring, Solis Aeterna, Holy Empire of Solaria"
+    },
+    "accords_and_alliances": {
+      "crown_accord": {
+        "partner": "Holy Empire of Solaria (Emperor Aurelius)",
+        "terms": "10% daily gross revenue to Crown Treasury; 3x max resale price cap enforced; 3 pre-release samples."
+      },
+      "house_vane_accord": {
+        "partner": "House Vane Logistics",
+        "terms": "Non-exclusive domestic distribution (10% retail fee); Tiered Social Pricing (1.1x to 3.0x cap)."
+      },
+      "vampire_covenant": {
+        "partner": "Nocturne Empire (Queen Carmilla)",
+        "terms": "Free plant-based Blood Substitute recipe; Elise branch in Nocturne Capital; permanent ceasefire."
+      },
+      "host_nations_transit_alliance": {
+        "partners": ["Solaria", "Khaldor", "Zarkaar", "Ocea", "Nocturne", "Sylvanna", "Aetheria"],
+        "terms": "50% net profit share from YuriTrain, YuriStation, YuriShip, and YuriAerial networks."
+      }
+    }
+  },
+  "systems": {
+    "yuri_station": {
+      "total_stations": 16277,
+      "solaria_stations": 8247,
+      "international_stations": 8030,
+      "road_network_km": 103000,
+      "fleet": {
+        "magic_buses": 3800,
+        "flatbed_freight_trucks": 1200
+      },
+      "staff_count": 51277
+    },
+    "yuri_train": {
+      "rail_network_km": 14000,
+      "primary_corridors": 6,
+      "average_speed_kmh": 200,
+      "max_speed_kmh": 450,
+      "builder_convoys": 6,
+      "profit_share_host_nations": 0.50
+    },
+    "yuri_aerial": {
+      "airports_integrated": 16277,
+      "phase_1_fleet_total": 101,
+      "levium_allocated_kg": 210.4,
+      "classes": {
+        "express_stingray": { "speed_kmh": 1800, "small_count": 20, "large_count": 5 },
+        "passenger_cruise": { "speed_kmh": 350, "small_count": 40, "medium_count": 20, "large_count": 5 },
+        "cargo_mule": { "speed_kmh": 900, "small_count": 5, "medium_count": 3, "large_count": 2, "super_cargo_count": 1 }
+      },
+      "safety_layers_count": 6
+    },
+    "yuri_ship": {
+      "coastal_ground_ports": 93,
+      "shipyard_alliance": 7,
+      "vessel_classes_count": 5,
+      "flagship_class": "Super Heavy Cargo (200m obsidian hull, 20,000t cargo)"
+    },
+    "yuri_bank": {
+      "atms": 21277,
+      "branches": 21797,
+      "card_printers": 240,
+      "cardholders_total": 88200000,
+      "global_population_saturation_pct": 33.9,
+      "merchant_saturation_pct": 81.0,
+      "holo_orbs_deployed": 11247,
+      "holo_orb_tiers": ["Public (10G)", "Facility (25G)", "Strategy (100G)"],
+      "fees": { "domestic_transfer": 0.0, "international_transfer": 0.005 }
+    },
+    "wand_leasing": {
+      "builder_wands_leased": 350,
+      "daily_rate_builder_wand_gold": 8,
+      "forging_stabilizer_pairs_leased": 26,
+      "daily_rate_pair_gold": 12
+    },
+    "levium_and_yurium": {
+      "tbms_deployed": 10,
+      "levium_yield_kg_per_day": 3.1,
+      "yurium_superalloy_specs": "Feather-light, pale grayish-blue, 3000°C heat-proof, unmeltable, impact-proof, perfect mana conductor."
+    }
+  },
+  "facilities": {
+    "yuri_hq": {
+      "location": "Sector 4, Commercial Ring, Solis Aeterna",
+      "floors": 5,
+      "floor_details": {
+        "F1": "Public Reception, YuriBank ATM/Counter, Vendor Negotiation, Transport Command",
+        "F2": "Affairs Dept (Seraphina) - 12-seat negotiation chamber, warded vault",
+        "F3": "Finance Dept (Lyra) - Main ledger archive, YuriBank integration terminal",
+        "F4": "Health Dept (Elara) - YuriERS dispatch center, Divine Academy liaison",
+        "F5": "Executive Board Chamber & Holo Orb Strategy Command Center"
+      }
+    },
+    "yuri_store_main": {
+      "location": "Sector 4, Commercial Ring, Solis Aeterna",
+      "footprint_m2": 200,
+      "floor_area_m2": 800,
+      "floors": {
+        "F1": "Retail Shopfront & Fast Food Counter (Takeaway)",
+        "F2": "Standard Restaurant (Rice cookers, noodle extruders)",
+        "F3": "Premium Fine Dining (12 tables, Teppanyaki counter) & Executive Office"
+      }
+    },
+    "complex_production_area": {
+      "main_complex_m2": 4200,
+      "sectors": {
+        "Sector A": "Consumer Goods (Lamps, MREs, Mana Cola, Cosmetics)",
+        "Sector B": "Machinery & Vehicles (240 Card Printers, Wand Bay, Bus/Train/Truck Bay)"
+      },
+      "yuri_aerial_complex": {
+        "assembly_bays": 15,
+        "holo_orb_line_per_day": 500
+      }
+    },
+    "staff_apartments": {
+      "capacity_units": 100,
+      "policy": "100% free housing & meals for employees + 3 family members"
+    },
+    "yuri_cosmetics_branches": [
+      { "name": "Solis Aeterna Flagship", "location": "Solis Aeterna" },
+      { "name": "Sylvanna Branch", "location": "Sylvanna Capital" },
+      { "name": "Nocturne Branch (Elise)", "location": "Nocturne Capital" }
+    ],
+    "yuri_academies": ["Sword Academy", "Magic Academy", "Divine Academy", "Craftsmanship Academy"],
+    "yuri_hospitals": "Public hospitals co-located at YuriStations across 7 nations (0 patient fees)"
+  },
+  "specifications": {
+    "yurium_superalloy": {
+      "composition": "Wood + Quartz + Mithril restructured via Molecule Wand",
+      "cost_per_kg_silver": 5,
+      "shaping_method": "Cold forged via Precision Forging Wand, locked with Stabilizer Wand",
+      "properties": ["3000C Heat-proof", "Impact-proof", "Waterproof", "Lightning-proof", "Perfect Mana Conductivity"]
+    },
+    "levium_anti_gravity_ore": {
+      "capacity": "1 kg Levium lifts 500 tons",
+      "excavation_yield": "3.1 kg/day via 10 TBMs in Aetheria",
+      "internal_hq_price_gold_per_gram": 5,
+      "external_purchase_cap_gold_per_gram": 50
+    },
+    "holo_orb_network": {
+      "public_orb": "10 Gold (10G Bandwidth)",
+      "facility_orb": "25 Gold (25G Bandwidth)",
+      "strategy_orb": "100 Gold (100G Bandwidth, up to 300 screens)"
+    }
+  },
+  "personnel": {
+    "executive_board": [
+      { "name": "Yurina Shirayuki", "role": "Founder, Supreme Owner & Chairwoman of the Board", "salary_gold": 0 },
+      { "name": "Lyra", "role": "Financial Manager & Board Member", "salary_gold": 10 },
+      { "name": "Seraphina von Aurelius", "role": "Affairs Manager & Board Member", "salary_gold": 10 },
+      { "name": "Lillith", "role": "Transportation Manager & Board Member", "salary_gold": 10 },
+      { "name": "Elara", "role": "Health Manager & Board Member", "salary_gold": 10 }
+    ],
+    "key_technical_teams": {
+      "khaldor_master_engineers": { "count": 30, "lead": ["Bruni Ironvein", "Durinn"], "daily_wage_gold": 8 },
+      "interior_specialists": { "count": 59, "daily_wage_gold": "3-5 Gold" },
+      "hq_departmental_staff": { "count": 32, "daily_wage_gold": "4-6 Gold" }
+    },
+    "store_roster": {
+      "wage_tier": "3 Gold/day base + 2 Gold/day overtime cap (max 5 Gold/day), 4-day workweek",
+      "shift_a_leads": ["Maren", "Lisette", "Tira", "Petra (Head Chef)", "Chef Yumi (Teppanyaki)"],
+      "shift_b_leads": ["Vanya", "Kira", "Vaelia", "Helga", "Chef Kaelia"]
+    },
+    "field_network_personnel": {
+      "station_managers": 16277,
+      "yuri_ers_staff": 2975
+    }
+  },
+  "catalog": {
+    "retail_items": [
+      { "id": "stone_lamp_small", "name": "Stone Lamp Small", "price_copper": 5000, "unit_cost_copper": 1000, "daily_units_sold": 2000, "type": "Lighting" },
+      { "id": "stone_lamp_medium", "name": "Stone Lamp Medium", "price_copper": 10000, "unit_cost_copper": 2500, "daily_units_sold": 500, "type": "Lighting" },
+      { "id": "stone_lamp_large", "name": "Stone Lamp Large", "price_copper": 30000, "unit_cost_copper": 7000, "daily_units_sold": 100, "type": "Lighting" },
+      { "id": "mre_standard", "name": "MRE Standard", "price_copper": 1000, "unit_cost_copper": 200, "daily_units_sold": 3000, "type": "Ration" },
+      { "id": "mre_self_heating", "name": "MRE Self-Heating", "price_copper": 3000, "unit_cost_copper": 600, "daily_units_sold": 1000, "type": "Ration" },
+      { "id": "crystal_bottle", "name": "Crystal Insulated Bottle", "price_copper": 5000, "unit_cost_copper": 1200, "daily_units_sold": 150, "type": "Utility" },
+      { "id": "chocolate_normal", "name": "Chocolate Box (Normal)", "price_copper": 1000, "unit_cost_copper": 250, "daily_units_sold": 400, "type": "Luxury" },
+      { "id": "chocolate_gold", "name": "Chocolate Box (Gold Box)", "price_copper": 50000, "unit_cost_copper": 12000, "daily_units_sold": 20, "type": "Luxury" }
+    ],
+    "fast_food_menu": [
+      { "id": "hamburger", "name": "Hamburger", "price_copper": 500, "unit_cost_copper": 100, "daily_units_sold": 800 },
+      { "id": "crispy_fries", "name": "Crispy Fries", "price_copper": 200, "unit_cost_copper": 40, "daily_units_sold": 1200 },
+      { "id": "karaage_6pcs", "name": "Karaage 6pcs", "price_copper": 500, "unit_cost_copper": 100, "daily_units_sold": 600 },
+      { "id": "mana_cola", "name": "Mana Cola Bottle", "price_copper": 1000, "unit_cost_copper": 150, "daily_units_sold": 800 },
+      { "id": "normal_combo", "name": "Normal Combo", "price_copper": 800, "unit_cost_copper": 180, "daily_units_sold": 500 },
+      { "id": "full_combo", "name": "Full Combo", "price_copper": 1000, "unit_cost_copper": 220, "daily_units_sold": 600 },
+      { "id": "max_combo", "name": "Max Combo", "price_copper": 2000, "unit_cost_copper": 450, "daily_units_sold": 300 }
+    ],
+    "restaurant_menu": [
+      { "id": "curry_ramen_gyudon", "name": "Curry / Ramen / Gyudon", "price_copper": 2000, "unit_cost_copper": 400, "daily_units_sold": 1500 },
+      { "id": "children_portion", "name": "Children's Portion", "price_copper": 500, "unit_cost_copper": 400, "daily_units_sold": 200 },
+      { "id": "tonkatsu_katsudon", "name": "Tonkatsu / Katsudon", "price_copper": 2500, "unit_cost_copper": 600, "daily_units_sold": 400 },
+      { "id": "wagyu_teppanyaki", "name": "Wagyu Teppanyaki", "price_copper": 5000, "unit_cost_copper": 1500, "daily_units_sold": 100 },
+      { "id": "tai_meshi", "name": "Tai Meshi", "price_copper": 4000, "unit_cost_copper": 1200, "daily_units_sold": 80 }
+    ],
+    "yuribank_cards": [
+      { "id": "card_regular", "name": "Regular Card", "price_copper": 500, "unit_cost_copper": 50, "daily_units_sold": 50000 },
+      { "id": "card_premium", "name": "Premium Card", "price_copper": 10000, "unit_cost_copper": 1000, "daily_units_sold": 2000 },
+      { "id": "card_custom", "name": "Custom Order Card", "price_copper": 100000, "unit_cost_copper": 10000, "daily_units_sold": 100 }
+    ]
+  },
+  "financials": {
+    "systems": {
+      "yuri_store": {
+        "daily_gross_revenue": 8941,
+        "daily_operating_burn": 1300.1,
+        "daily_net_surplus": "daily_gross_revenue - daily_operating_burn"
+      },
+      "yuri_cosmetics": {
+        "daily_gross_revenue": 15200,
+        "daily_operating_burn": 1800,
+        "daily_net_surplus": "daily_gross_revenue - daily_operating_burn"
+      },
+      "yuri_station": {
+        "daily_gross_revenue": 44292,
+        "daily_operating_burn": 31581,
+        "host_share_ratio": 0.50,
+        "daily_net_surplus": "daily_gross_revenue - daily_operating_burn - host_share"
+      },
+      "yuri_train": {
+        "daily_gross_revenue": 88000,
+        "daily_operating_burn": 8000,
+        "host_share_ratio": 0.50,
+        "daily_net_surplus": "daily_gross_revenue - daily_operating_burn - host_share"
+      },
+      "wand_leasing": {
+        "daily_gross_revenue": 3112,
+        "daily_operating_burn": 0,
+        "daily_net_surplus": "daily_gross_revenue - daily_operating_burn"
+      },
+      "yuri_bank": {
+        "daily_international_volume_gold": 39200000,
+        "net_fee_ratio": 0.0025,
+        "daily_holo_orb_sales_gold": 3000,
+        "daily_gross_revenue": 106500,
+        "daily_operating_burn": 0,
+        "daily_net_surplus": "daily_gross_revenue - daily_operating_burn"
+      }
+    },
+    "consolidated_daily_net_surplus_gold": 300513,
+    "reserves": {
+      "ley_line_platinum": 308744.5,
+      "guild_escrow_platinum": 260.15,
+      "store_liquid_platinum": 1225.0,
+      "charity_reserve_platinum": 380.0,
+      "levium_reserve_kg": 320.0,
+      "yurium_reserve_kg": 70.0
+    },
+    "time_delta_rules": [
+      {
+        "target": "reserves.ley_line_platinum",
+        "formula": "reserves.ley_line_platinum + ((financials.consolidated_daily_net_surplus_gold / 100) * delta_days)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yuri Systems — World State & Lorebook Manager</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+
+  <div class="app-layout">
+    <!-- Sidebar Navigation (PC) -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-lucide="layers"></i>
+        </div>
+        <div class="brand-text">
+          <h2>Yuri Systems</h2>
+          <span>World State & Lorebook</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard & Simulation</span>
+        </button>
+        <button class="nav-item" data-tab="lorebook">
+          <i data-lucide="book-open"></i>
+          <span>Lorebook & World State</span>
+        </button>
+        <button class="nav-item" data-tab="catalog">
+          <i data-lucide="shopping-bag"></i>
+          <span>Catalog & Pricing</span>
+        </button>
+        <button class="nav-item" data-tab="mutations">
+          <i data-lucide="sliders"></i>
+          <span>Mutations & Redis</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-indicator online">
+          <span class="status-dot"></span>
+          <span class="status-label">Upstash Redis Online</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Header Bar -->
+      <header class="top-header">
+        <div class="header-left">
+          <button class="mobile-nav-toggle" id="mobileNavToggle">
+            <i data-lucide="menu"></i>
+          </button>
+          <h1 id="pageTitle">Dashboard & Time Simulation</h1>
+        </div>
+        
+        <div class="header-right">
+          <div class="badge badge-day">
+            <i data-lucide="calendar"></i>
+            <span id="headerCurrentDay">Day 242</span>
+          </div>
+          <div class="badge badge-platinum">
+            <i data-lucide="coins"></i>
+            <span id="headerPlatinumReserves">308,744.5 Pt</span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btnQuickRefresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+        </div>
+      </header>
+
+      <!-- TAB 1: DASHBOARD & TIME SIMULATION -->
+      <section class="tab-page active" id="page-dashboard">
+        <!-- Stat Cards Grid -->
+        <div class="stats-grid">
+          <div class="stat-card glass glow-primary">
+            <div class="stat-header">
+              <span class="stat-title">Ley Line Platinum Reserves</span>
+              <div class="stat-icon-wrapper"><i data-lucide="database"></i></div>
+            </div>
+            <div class="stat-value" id="dashLeyLinePt">308,744.50 Pt</div>
+            <div class="stat-sub">~30.87 Million Gold Equivalent</div>
+          </div>
+
+          <div class="stat-card glass glow-success">
+            <div class="stat-header">
+              <span class="stat-title">Consolidated Daily Net Surplus</span>
+              <div class="stat-icon-wrapper"><i data-lucide="trending-up"></i></div>
+            </div>
+            <div class="stat-value" id="dashDailyNetGold">300,513 Gold/day</div>
+            <div class="stat-sub">~3,005.13 Platinum added every day</div>
+          </div>
+
+          <div class="stat-card glass glow-warning">
+            <div class="stat-header">
+              <span class="stat-title">Consolidated Daily Gross Income</span>
+              <div class="stat-icon-wrapper"><i data-lucide="dollar-sign"></i></div>
+            </div>
+            <div class="stat-value" id="dashDailyGrossGold">389,104 Gold/day</div>
+            <div class="stat-sub">Across Store, Cosmetics, Train, Station, Bank, Leasing</div>
+          </div>
+
+          <div class="stat-card glass glow-info">
+            <div class="stat-header">
+              <span class="stat-title">Host Nations Daily Profit Share</span>
+              <div class="stat-icon-wrapper"><i data-lucide="landmark"></i></div>
+            </div>
+            <div class="stat-value" id="dashHostShareGold">46,356 Gold/day</div>
+            <div class="stat-sub">50% Rail/Transit Net Share to 7 Nations</div>
+          </div>
+        </div>
+
+        <!-- Simulation Controller Card -->
+        <div class="card glass shadow-lg mt-6">
+          <div class="card-header">
+            <h3><i data-lucide="clock"></i> Time Progression Simulator (&Delta;t Engine)</h3>
+            <span class="card-subtitle">Advance world timeline deterministically without calling LLMs</span>
+          </div>
+          <div class="card-body">
+            <div class="sim-controls">
+              <div class="input-group">
+                <label for="inputDeltaDays">Advance Days (&Delta;t):</label>
+                <input type="number" id="inputDeltaDays" min="1" max="365" value="1" class="form-input">
+              </div>
+              <button class="btn btn-accent" id="btnAdvanceTime">
+                <i data-lucide="fast-forward"></i> Execute Time Skip (&Delta;t Tick)
+              </button>
+            </div>
+            <p class="sim-notice">
+              <i data-lucide="info"></i> Advancing time will calculate exact daily surplus ($\text{Surplus} \times \Delta t$) and credit the Ley Line Platinum reserves in Upstash Redis automatically.
+            </p>
+          </div>
+        </div>
+
+        <!-- Infrastructure Systems Breakdown -->
+        <h3 class="section-title mt-8"><i data-lucide="server"></i> Infrastructure Systems Financial Cash Flow</h3>
+        <div class="systems-grid mt-4" id="systemsGridContainer">
+          <!-- Dynamically populated system cards -->
+        </div>
+      </section>
+
+      <!-- TAB 2: LOREBOOK & WORLD STATE VIEWER -->
+      <section class="tab-page" id="page-lorebook">
+        <div class="lorebook-controls card glass">
+          <div class="domain-selector">
+            <span class="label">Select World State Domain:</span>
+            <div class="chip-group" id="domainChipGroup">
+              <button class="chip active" data-domain="meta">meta</button>
+              <button class="chip" data-domain="organizations">organizations</button>
+              <button class="chip" data-domain="systems">systems</button>
+              <button class="chip" data-domain="facilities">facilities</button>
+              <button class="chip" data-domain="specifications">specifications</button>
+              <button class="chip" data-domain="personnel">personnel</button>
+              <button class="chip" data-domain="catalog">catalog</button>
+              <button class="chip" data-domain="financials">financials</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Split View: System Prompt Snapshot vs Structured Domain JSON -->
+        <div class="split-view mt-6">
+          <div class="card glass flex-1">
+            <div class="card-header">
+              <h3><i data-lucide="file-text"></i> Prompt Snapshot ([WORLD STATE SNAPSHOT])</h3>
+              <button class="btn btn-secondary btn-sm" id="btnCopySnapshot"><i data-lucide="copy"></i> Copy</button>
+            </div>
+            <div class="card-body">
+              <pre class="code-preview" id="previewSnapshot">Loading snapshot...</pre>
+            </div>
+          </div>
+
+          <div class="card glass flex-1">
+            <div class="card-header">
+              <h3><i data-lucide="code"></i> Domain Data Viewer (<span id="selectedDomainTitle">meta</span>)</h3>
+              <button class="btn btn-primary btn-sm" id="btnSaveDomainJson"><i data-lucide="save"></i> Save to Upstash</button>
+            </div>
+            <div class="card-body">
+              <textarea id="jsonEditorDomain" class="json-editor" spellcheck="false"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: CATALOG & PRICING MANAGER -->
+      <section class="tab-page" id="page-catalog">
+        <div class="card glass">
+          <div class="card-header">
+            <div>
+              <h3><i data-lucide="shopping-cart"></i> Product Catalog & Dynamic Pricing Manager</h3>
+              <span class="card-subtitle">All prices are calculated in Copper ($1\text{ Gold} = 10,000\text{ Copper}$). Revenue & Net Profit recalculate in real-time.</span>
+            </div>
+            <button class="btn btn-success" id="btnSaveCatalog">
+              <i data-lucide="save"></i> Save Catalog & Recalculate Store Surplus
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="data-table" id="catalogTable">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Item Name</th>
+                    <th>Price (Copper)</th>
+                    <th>Unit Cost (Copper)</th>
+                    <th>Daily Sold</th>
+                    <th>Daily Gross (Gold)</th>
+                    <th>Daily Cost (Gold)</th>
+                    <th>Daily Net (Gold)</th>
+                  </tr>
+                </thead>
+                <tbody id="catalogTableBody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: MUTATIONS & REDIS KEY MANAGER -->
+      <section class="tab-page" id="page-mutations">
+        <div class="split-view">
+          <div class="card glass flex-1">
+            <div class="card-header">
+              <h3><i data-lucide="zap"></i> Manual State Mutation Runner</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label for="mutationAction">Mutation Action:</label>
+                <select id="mutationAction" class="form-select">
+                  <option value="UPDATE_VAR">UPDATE_VAR (Modify Variable)</option>
+                  <option value="UPSERT_ENTITY">UPSERT_ENTITY (Add/Update Entity)</option>
+                  <option value="DELETE_ENTITY">DELETE_ENTITY (Remove Entity)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="mutationPath">Path / Domain:</label>
+                <input type="text" id="mutationPath" placeholder="e.g. financials.reserves.store_liquid_platinum" class="form-input">
+              </div>
+
+              <div class="form-group">
+                <label for="mutationOp">Operation (for UPDATE_VAR):</label>
+                <select id="mutationOp" class="form-select">
+                  <option value="SET">SET (Replace Value)</option>
+                  <option value="ADD">ADD (Increment Value)</option>
+                  <option value="SUB">SUB (Decrement Value)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="mutationValue">Value / Payload JSON:</label>
+                <textarea id="mutationValue" placeholder="e.g. 50 or JSON object" class="form-textarea" rows="4"></textarea>
+              </div>
+
+              <button class="btn btn-accent w-full" id="btnExecuteMutation">
+                <i data-lucide="play"></i> Execute Mutation on Upstash
+              </button>
+            </div>
+          </div>
+
+          <div class="card glass flex-1">
+            <div class="card-header">
+              <h3><i data-lucide="list"></i> Activity Log & Audit Trail</h3>
+            </div>
+            <div class="card-body">
+              <div class="log-console" id="logConsole">
+                <div class="log-entry info">[SYSTEM] Upstash Redis connected. Ready for operations.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Mobile Bottom Navigation Bar -->
+  <nav class="mobile-bottom-nav">
+    <button class="mobile-nav-item active" data-tab="dashboard">
+      <i data-lucide="layout-dashboard"></i>
+      <span>Dashboard</span>
+    </button>
+    <button class="mobile-nav-item" data-tab="lorebook">
+      <i data-lucide="book-open"></i>
+      <span>Lorebook</span>
+    </button>
+    <button class="mobile-nav-item" data-tab="catalog">
+      <i data-lucide="shopping-bag"></i>
+      <span>Catalog</span>
+    </button>
+    <button class="mobile-nav-item" data-tab="mutations">
+      <i data-lucide="sliders"></i>
+      <span>Mutations</span>
+    </button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
