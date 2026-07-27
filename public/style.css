@@ -68,10 +68,11 @@ body.dark-theme {
   min-height: 100vh;
 }
 
-/* Discord Dual-Rail Sidebar (Compact 72px Rail) */
+/* Discord Dual-Rail Sidebar (Glassmorphic Theme Sync) */
 .sidebar.discord-sidebar {
   width: 72px;
-  background: var(--bg-discord-rail);
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: var(--backdrop-blur);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -80,20 +81,20 @@ body.dark-theme {
   left: 0;
   z-index: 100;
   transition: transform 0.3s ease;
-  border-right: 1px solid rgba(0, 0, 0, 0.3);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+  border-right: 1px solid var(--border-color);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
 }
 
 /* Discord Left Server/Tab Rail */
 .discord-rail {
   width: 100%;
   height: 100%;
-  background: var(--bg-discord-rail);
+  background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0;
-  gap: 8px;
+  padding: 16px 0;
+  gap: 10px;
   z-index: 2;
 }
 
@@ -103,12 +104,13 @@ body.dark-theme {
 
 .rail-icon-subtle {
   background: rgba(255, 255, 255, 0.05);
-  color: var(--color-discord-muted);
+  color: var(--text-muted);
 }
 
 .rail-item:hover .rail-icon-subtle {
   background: var(--color-success);
   color: #ffffff;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
 }
 
 .rail-divider {
@@ -137,6 +139,7 @@ body.dark-theme {
   background: #ffffff;
   border-radius: 0 4px 4px 0;
   transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
 }
 
 .rail-item:hover .rail-pill {
@@ -151,8 +154,9 @@ body.dark-theme {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #313338;
-  color: var(--color-discord-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -162,25 +166,30 @@ body.dark-theme {
 
 .rail-item:hover .rail-icon {
   border-radius: 16px;
-  background: var(--color-discord-blurple);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: #ffffff;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
 }
 
 .rail-item.active .rail-icon {
   border-radius: 16px;
-  background: var(--color-discord-blurple);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(88, 101, 242, 0.4);
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.5);
 }
 
 .rail-brand .rail-icon {
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: transparent;
   color: #ffffff;
 }
 
 .rail-brand:hover .rail-icon {
   border-radius: 16px;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.6);
 }
 
 /* Tooltips */
@@ -333,9 +342,9 @@ body.dark-theme {
 /* Tree Navigation Sidebar — Glass & Hierarchy Style */
 .tree-card.discord-channel-tree {
   position: sticky;
-  top: 80px;
-  height: calc(100vh - 110px);
-  max-height: calc(100vh - 110px);
+  top: 24px;
+  height: calc(100vh - 145px);
+  max-height: calc(100vh - 145px);
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
