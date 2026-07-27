@@ -1,0 +1,174 @@
+{
+  "lorebooks": [
+    {
+      "id": "lb_yuri_hq_ecosystem",
+      "name": "Yuri HQ Ecosystem",
+      "description": "Commercial, logistics, and operational lore for Yuri HQ in Solis Aeterna.",
+      "status": "Active",
+      "settings": {
+        "day_trigger_patterns": [
+          "\\[\\s*🕒?\\s*Day\\s+(\\d+)",
+          "\\[Day\\s+(\\d+)"
+        ],
+        "depth_scan": 2,
+        "insertion_mode": "context"
+      },
+      "lores": [
+        {
+          "id": "lore_yuri_hq_head",
+          "name": "Yuri HQ Main Headquarters",
+          "group": "YuriHQ",
+          "is_group_head": true,
+          "trigger": {
+            "keywords": [
+              "yuri hq",
+              "yurihq",
+              "headquarters"
+            ],
+            "trigger_rate": 100
+          },
+          "prompt_area": {
+            "definition": "Global administrative headquarters and independent commercial ecosystem of Yuri HQ.",
+            "catalog": [],
+            "staff": {
+              "executive_director": "Yurina Shirayuki",
+              "chief_operations": "Lina"
+            },
+            "policy": {
+              "neutrality_clause": "Independent civil aviation status; non-militarization pledge."
+            },
+            "custom_data": {
+              "location": "Trade Ring District 4, Solis Aeterna"
+            }
+          }
+        },
+        {
+          "id": "lore_yuri_store_01",
+          "name": "YuriStore - Main Branch",
+          "group": "YuriHQ",
+          "is_group_head": false,
+          "trigger": {
+            "keywords": [
+              "yuristore",
+              "yuri store",
+              "retail shop"
+            ],
+            "trigger_rate": 100
+          },
+          "prompt_area": {
+            "definition": "Flagship retail convenience store selling food, train tickets, and daily essentials.",
+            "catalog": [
+              {
+                "id": "item_bento_yuri",
+                "name": "Yuri Special Bento Box",
+                "type": "retail",
+                "price_copper": 500,
+                "unit_cost_copper": 200,
+                "daily_units_sold": 150,
+                "monthly_units_sold": 4500,
+                "sold_out": false,
+                "start_date": 1,
+                "branches": 3
+              },
+              {
+                "id": "item_train_ticket",
+                "name": "YuriExpress Train Ticket",
+                "type": "ticket",
+                "price_copper": 2000,
+                "unit_cost_copper": 500,
+                "daily_units_sold": 50,
+                "monthly_units_sold": 1500,
+                "sold_out": false,
+                "start_date": 10,
+                "branches": 1
+              },
+              {
+                "id": "fee_host_nation",
+                "name": "Host Nation Revenue Share",
+                "type": "fee_revenue_share",
+                "formula_type": "tổng_doanh_thu",
+                "value": "-50%",
+                "description": "50% gross revenue shared with Solaria Holy Empire"
+              },
+              {
+                "id": "fee_fixed_rent",
+                "name": "Fixed Daily Property Lease",
+                "type": "fee_revenue_share",
+                "formula_type": "tổng_doanh_thu",
+                "value": "-5000",
+                "description": "Fixed daily commercial space management tax"
+              }
+            ],
+            "staff": {
+              "store_manager": "Yurina Shirayuki",
+              "shift_a_lead": "Lina",
+              "total_employees": 12
+            },
+            "policy": {
+              "return_policy": "Full refund within 7 days with valid receipt",
+              "vip_discount": "10% discount for YuriBank VIP cardholders"
+            },
+            "custom_data": {}
+          }
+        },
+        {
+          "id": "lore_yuri_train_head",
+          "name": "YuriTrain High-Speed Transit",
+          "group": "YuriLogistics",
+          "is_group_head": true,
+          "trigger": {
+            "keywords": [
+              "yuritrain",
+              "yuri train",
+              "railway",
+              "solis express"
+            ],
+            "trigger_rate": 100
+          },
+          "prompt_area": {
+            "definition": "High-speed levitation rail network connecting District 4 to Solis Coastal Harbor.",
+            "catalog": [
+              {
+                "id": "ticket_standard",
+                "name": "Standard Line Ticket",
+                "type": "ticket",
+                "price_copper": 1000,
+                "unit_cost_copper": 100,
+                "daily_units_sold": 88,
+                "monthly_units_sold": 2640,
+                "sold_out": false,
+                "start_date": 1,
+                "branches": 4
+              },
+              {
+                "id": "fee_rail_maintenance",
+                "name": "Track Operational Maintenance",
+                "type": "fee_revenue_share",
+                "formula_type": "tổng_doanh_thu",
+                "value": "-8000",
+                "description": "Daily Levium track levitation maintenance fee"
+              },
+              {
+                "id": "fee_host_rail_share",
+                "name": "Host Nation Railway Lease Share",
+                "type": "fee_revenue_share",
+                "formula_type": "tổng_doanh_thu",
+                "value": "-50%",
+                "description": "50% net surplus sharing for host empire"
+              }
+            ],
+            "staff": {
+              "chief_engineer": "Alex",
+              "dispatch_captain": "John"
+            },
+            "policy": {
+              "child_fare": "Free transit for children under age 5",
+              "baggage_limit": "Maximum 20kg carry-on baggage per passenger"
+            },
+            "custom_data": {}
+          }
+        }
+      ]
+    }
+  ]
+}

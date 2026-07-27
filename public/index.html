@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Yuri Systems — World State & Lorebook Manager</title>
-  <!-- Google Fonts: Inter & Outfit -->
+  <title>Yuri Systems — Lorebook & World State Control Center</title>
+  <!-- Google Fonts: Inter & Outfit & Fira Code -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="style.css">
@@ -15,41 +15,42 @@
 <body class="dark-theme">
 
   <div class="app-layout">
-    <!-- Sidebar Navigation (PC) -->
+    <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-icon">
-          <i data-lucide="layers"></i>
+          <i data-lucide="book-open"></i>
         </div>
         <div class="brand-text">
           <h2>Yuri Systems</h2>
-          <span>World State & Lorebook</span>
+          <span>Lorebook & State Manager</span>
         </div>
       </div>
 
       <nav class="nav-menu">
-        <button class="nav-item active" data-tab="dashboard">
-          <i data-lucide="layout-dashboard"></i>
-          <span>Dashboard & Simulation</span>
+        <button class="nav-item active" data-tab="lorebooks">
+          <i data-lucide="layers"></i>
+          <span>Lorebook Database</span>
         </button>
-        <button class="nav-item" data-tab="lorebook">
-          <i data-lucide="book-open"></i>
-          <span>Lorebook & World State</span>
+        <button class="nav-item" data-tab="simulator">
+          <i data-lucide="play-circle"></i>
+          <span>Context Simulator</span>
         </button>
-        <button class="nav-item" data-tab="catalog">
-          <i data-lucide="shopping-bag"></i>
-          <span>Catalog & Pricing</span>
+        <button class="nav-item" data-tab="worldstate">
+          <i data-lucide="globe"></i>
+          <span>World State & Cashflow</span>
         </button>
-        <button class="nav-item" data-tab="mutations">
-          <i data-lucide="sliders"></i>
-          <span>Mutations & Redis</span>
+        <button class="nav-item" data-tab="settings">
+          <i data-lucide="settings"></i>
+          <span>Authentication & Logs</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
         <div class="status-indicator online">
           <span class="status-dot"></span>
-          <span class="status-label">Upstash Redis Online</span>
+          <span class="status-label">Upstash Redis Connected</span>
+        </div>
       </div>
     </aside>
 
@@ -58,230 +59,366 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <!-- Top Header Bar -->
+      <!-- Header -->
       <header class="top-header">
         <div class="header-left">
           <button class="mobile-nav-toggle" id="mobileNavToggle">
             <i data-lucide="menu"></i>
           </button>
-          <h1 id="pageTitle">Dashboard & Time Simulation</h1>
+          <h1 id="pageTitle">Lorebook Database Management</h1>
         </div>
-        
+
         <div class="header-right">
-          <div class="badge badge-day">
-            <i data-lucide="calendar"></i>
-            <span id="headerCurrentDay">Day 242</span>
-          </div>
-          <div class="badge badge-platinum">
-            <i data-lucide="coins"></i>
-            <span id="headerPlatinumReserves">308,744.5 Pt</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" id="btnAuthSettings" title="Auth Key Settings">
-            <i data-lucide="lock"></i> <span class="btn-text" id="authStatusText">Key Set</span>
+          <button class="btn btn-secondary btn-sm" id="btnExportDb" title="Export JSON Database">
+            <i data-lucide="download"></i> <span class="btn-text">Export JSON</span>
           </button>
-          <button class="btn btn-primary btn-sm" id="btnQuickRefresh" title="Refresh">
-            <i data-lucide="refresh-cw"></i> <span class="btn-text">Refresh</span>
+          <button class="btn btn-secondary btn-sm" id="btnImportDb" title="Import JSON Database">
+            <i data-lucide="upload"></i> <span class="btn-text">Import JSON</span>
+          </button>
+          <button class="btn btn-primary btn-sm" id="btnSaveStore" title="Save All Changes">
+            <i data-lucide="save"></i> <span class="btn-text">Save Changes</span>
           </button>
         </div>
       </header>
 
-      <!-- TAB 1: DASHBOARD & TIME SIMULATION -->
-      <section class="tab-page active" id="page-dashboard">
-        <!-- Stat Cards Grid -->
-        <div class="stats-grid">
-          <div class="stat-card glass glow-primary">
-            <div class="stat-header">
-              <span class="stat-title">Ley Line Platinum Reserves</span>
-              <div class="stat-icon-wrapper"><i data-lucide="database"></i></div>
-            </div>
-            <div class="stat-value" id="dashLeyLinePt">308,744.50 Pt</div>
-            <div class="stat-sub">~30.87 Million Gold Equivalent</div>
-          </div>
-
-          <div class="stat-card glass glow-success">
-            <div class="stat-header">
-              <span class="stat-title">Consolidated Daily Net Surplus</span>
-              <div class="stat-icon-wrapper"><i data-lucide="trending-up"></i></div>
-            </div>
-            <div class="stat-value" id="dashDailyNetGold">300,513 Gold/day</div>
-            <div class="stat-sub">~3,005.13 Platinum added every day</div>
-          </div>
-
-          <div class="stat-card glass glow-warning">
-            <div class="stat-header">
-              <span class="stat-title">Consolidated Daily Gross Income</span>
-              <div class="stat-icon-wrapper"><i data-lucide="dollar-sign"></i></div>
-            </div>
-            <div class="stat-value" id="dashDailyGrossGold">389,104 Gold/day</div>
-            <div class="stat-sub">Across Store, Cosmetics, Train, Station, Bank, Leasing</div>
-          </div>
-
-          <div class="stat-card glass glow-info">
-            <div class="stat-header">
-              <span class="stat-title">Host Nations Daily Profit Share</span>
-              <div class="stat-icon-wrapper"><i data-lucide="landmark"></i></div>
-            </div>
-            <div class="stat-value" id="dashHostShareGold">46,356 Gold/day</div>
-            <div class="stat-sub">50% Rail/Transit Net Share to 7 Nations</div>
-          </div>
-        </div>
-
-        <!-- Simulation Controller Card -->
-        <div class="card glass shadow-lg mt-6">
-          <div class="card-header">
-            <h3><i data-lucide="clock"></i> Time Progression Simulator (&Delta;t Engine)</h3>
-            <span class="card-subtitle">Advance world timeline deterministically without calling LLMs</span>
-          </div>
-          <div class="card-body">
-            <div class="sim-controls">
-              <div class="input-group">
-                <label for="inputDeltaDays">Advance Days (&Delta;t):</label>
-                <input type="number" id="inputDeltaDays" min="1" max="365" value="1" class="form-input">
-              </div>
-              <button class="btn btn-accent" id="btnAdvanceTime">
-                <i data-lucide="fast-forward"></i> Execute Time Skip (&Delta;t Tick)
+      <!-- TAB 1: LOREBOOK DATABASE MANAGER -->
+      <section class="tab-page active" id="page-lorebooks">
+        <div class="workspace-grid">
+          <!-- Tree Navigator Sidebar -->
+          <div class="card glass tree-card">
+            <div class="card-header">
+              <h3><i data-lucide="folder-tree"></i> Database Hierarchy</h3>
+              <button class="btn btn-primary btn-xs" id="btnAddLorebook">
+                <i data-lucide="plus"></i> New Book
               </button>
             </div>
-            <p class="sim-notice">
-              <i data-lucide="info"></i> Advancing time will calculate exact daily surplus ($\text{Surplus} \times \Delta t$) and credit the Ley Line Platinum reserves in Upstash Redis automatically.
-            </p>
-          </div>
-        </div>
-
-        <!-- Infrastructure Systems Breakdown -->
-        <h3 class="section-title mt-8"><i data-lucide="server"></i> Infrastructure Systems Financial Cash Flow</h3>
-        <div class="systems-grid mt-4" id="systemsGridContainer">
-          <!-- Dynamically populated system cards -->
-        </div>
-      </section>
-
-      <!-- TAB 2: LOREBOOK & WORLD STATE VIEWER -->
-      <section class="tab-page" id="page-lorebook">
-        <div class="lorebook-controls card glass">
-          <div class="domain-selector">
-            <span class="label">Select World State Domain:</span>
-            <div class="chip-group" id="domainChipGroup">
-              <button class="chip active" data-domain="meta">meta</button>
-              <button class="chip" data-domain="organizations">organizations</button>
-              <button class="chip" data-domain="systems">systems</button>
-              <button class="chip" data-domain="facilities">facilities</button>
-              <button class="chip" data-domain="specifications">specifications</button>
-              <button class="chip" data-domain="personnel">personnel</button>
-              <button class="chip" data-domain="catalog">catalog</button>
-              <button class="chip" data-domain="financials">financials</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Split View: System Prompt Snapshot vs Structured Domain JSON -->
-        <div class="split-view mt-6">
-          <div class="card glass flex-1">
-            <div class="card-header">
-              <h3><i data-lucide="file-text"></i> Prompt Snapshot ([WORLD STATE SNAPSHOT])</h3>
-              <button class="btn btn-secondary btn-sm" id="btnCopySnapshot"><i data-lucide="copy"></i> Copy</button>
-            </div>
             <div class="card-body">
-              <pre class="code-preview" id="previewSnapshot">Loading snapshot...</pre>
+              <div class="tree-container" id="treeContainer">
+                <!-- Dynamically populated hierarchy tree -->
+              </div>
             </div>
           </div>
 
-          <div class="card glass flex-1">
-            <div class="card-header">
-              <h3><i data-lucide="code"></i> Domain Data Viewer (<span id="selectedDomainTitle">meta</span>)</h3>
-              <button class="btn btn-primary btn-sm" id="btnSaveDomainJson"><i data-lucide="save"></i> Save to Upstash</button>
+          <!-- Main Workspace / Editor -->
+          <div class="card glass editor-card">
+            <!-- Lorebook Level Editor -->
+            <div id="lorebookEditorView" class="editor-view hidden">
+              <div class="card-header border-b">
+                <div>
+                  <h3 id="lbEditTitle">Lorebook Settings</h3>
+                  <span class="card-subtitle">Global configuration for this Lorebook collection</span>
+                </div>
+                <div class="status-selector">
+                  <label>Operational Status:</label>
+                  <select id="lbStatusSelect" class="form-select select-status">
+                    <option value="Active">Active (Full Index + Triggered Lore)</option>
+                    <option value="Summary">Summary (Group Index + Triggered Lore)</option>
+                    <option value="All">All (Dump All Lores Unconditionally)</option>
+                    <option value="Off">Off (Disabled)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="lbNameInput">Lorebook Name:</label>
+                    <input type="text" id="lbNameInput" class="form-input" placeholder="e.g. Yuri HQ Ecosystem">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="lbInsertionSelect">Context Insertion Target:</label>
+                    <select id="lbInsertionSelect" class="form-select">
+                      <option value="context">System Context (After System Prompt)</option>
+                      <option value="user_msg">User Message (Append to end of request)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group mt-4">
+                  <label for="lbDescInput">Description:</label>
+                  <textarea id="lbDescInput" class="form-textarea" rows="2" placeholder="Brief summary of what this lorebook covers..."></textarea>
+                </div>
+
+                <div class="form-grid mt-4">
+                  <div class="form-group">
+                    <label for="lbPatternsInput">Day Trigger Regex Patterns (One per line):</label>
+                    <textarea id="lbPatternsInput" class="form-textarea code-font" rows="3" placeholder="\[\s*🕒?\s*Day\s+(\d+)&#10;\[Day\s+(\d+)"></textarea>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="lbDepthInput">Depth Scan (Recent Message Pairs):</label>
+                    <input type="number" id="lbDepthInput" min="1" max="10" value="2" class="form-input">
+                    <span class="form-help">Number of recent message pairs scanned for keywords and day tokens.</span>
+                  </div>
+                </div>
+
+                <div class="editor-actions mt-6">
+                  <button class="btn btn-success" id="btnSaveLbSettings">
+                    <i data-lucide="check"></i> Apply Settings
+                  </button>
+                  <button class="btn btn-primary" id="btnAddLoreUnderLb">
+                    <i data-lucide="file-plus"></i> Add New Lore Entry
+                  </button>
+                  <button class="btn btn-danger btn-outline" id="btnDeleteLorebook">
+                    <i data-lucide="trash-2"></i> Delete Lorebook
+                  </button>
+                </div>
+              </div>
             </div>
-            <div class="card-body">
-              <textarea id="jsonEditorDomain" class="json-editor" spellcheck="false"></textarea>
+
+            <!-- Lore Entry Level Editor -->
+            <div id="loreEditorView" class="editor-view hidden">
+              <div class="card-header border-b">
+                <div>
+                  <h3 id="loreEditTitle">Edit Lore Entry</h3>
+                  <span class="card-subtitle" id="loreEditSubtitle">Group: N/A</span>
+                </div>
+                <div class="head-toggle-wrapper">
+                  <label class="toggle-checkbox">
+                    <input type="checkbox" id="loreGroupHeadCheckbox">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label"><i data-lucide="crown"></i> Designated Group Head</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label for="loreNameInput">Lore Entry Name:</label>
+                    <input type="text" id="loreNameInput" class="form-input" placeholder="e.g. YuriStore Main Branch">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="loreGroupInput">Group Name:</label>
+                    <input type="text" id="loreGroupInput" class="form-input" placeholder="e.g. YuriHQ">
+                  </div>
+                </div>
+
+                <!-- Trigger Settings Box -->
+                <div class="trigger-box card glass mt-4">
+                  <div class="card-header-sm">
+                    <h4><i data-lucide="zap"></i> Trigger Rules</h4>
+                  </div>
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label for="loreKeywordsInput">Trigger Keywords (Comma separated, empty = Always Active):</label>
+                      <input type="text" id="loreKeywordsInput" class="form-input" placeholder="yuristore, yuri store, retail shop">
+                    </div>
+
+                    <div class="form-group">
+                      <label for="loreRateInput">Trigger Rate (% Chance, default 100):</label>
+                      <input type="number" id="loreRateInput" min="0" max="100" value="100" class="form-input">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Prompt Area Sub-Tabs -->
+                <div class="prompt-tabs-wrapper mt-6">
+                  <div class="sub-tab-menu">
+                    <button class="sub-tab active" data-subtab="definition">Definition</button>
+                    <button class="sub-tab" data-subtab="catalog">Catalog & Business Engine</button>
+                    <button class="sub-tab" data-subtab="staff">Staff Roster</button>
+                    <button class="sub-tab" data-subtab="policy">Policies & Terms</button>
+                    <button class="sub-tab" data-subtab="custom">Custom Metadata</button>
+                  </div>
+
+                  <!-- Sub-Tab 1: Definition -->
+                  <div class="sub-tab-content active" id="subtab-definition">
+                    <div class="form-group">
+                      <label for="loreDefInput">Definition / Description Text:</label>
+                      <textarea id="loreDefInput" class="form-textarea" rows="6" placeholder="Enter the fundamental description or background context for this lore entry..."></textarea>
+                    </div>
+                  </div>
+
+                  <!-- Sub-Tab 2: Catalog -->
+                  <div class="sub-tab-content" id="subtab-catalog">
+                    <div class="catalog-header-bar">
+                      <div>
+                        <h4>Item & Fee Catalog</h4>
+                        <span class="text-sub">Prices in Copper ($1\text{ Gold} = 10,000\text{ Copper}$). Formulas support fixed or % revenue sharing.</span>
+                      </div>
+                      <button class="btn btn-primary btn-xs" id="btnAddCatalogItem">
+                        <i data-lucide="plus"></i> Add Item / Fee
+                      </button>
+                    </div>
+
+                    <div class="table-responsive mt-3">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            <th>Item Name</th>
+                            <th>Type</th>
+                            <th>Price (Copper)</th>
+                            <th>Cost (Copper)</th>
+                            <th>Daily Sold</th>
+                            <th>Formula / Value</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="catalogTableBody">
+                          <!-- Populated dynamically -->
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <!-- Live Calculation Preview Card -->
+                    <div class="card glass mt-4 glow-info">
+                      <div class="card-header-sm">
+                        <h5><i data-lucide="calculator"></i> Day Simulation Preview (Simulated for Day 242)</h5>
+                      </div>
+                      <div class="calc-metrics-grid" id="catalogCalcPreview">
+                        <!-- Calculated output -->
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Sub-Tab 3: Staff -->
+                  <div class="sub-tab-content" id="subtab-staff">
+                    <div class="kv-header-bar">
+                      <h4>Staff Roster Dictionary</h4>
+                      <button class="btn btn-secondary btn-xs" id="btnAddStaffRow"><i data-lucide="plus"></i> Add Staff Row</button>
+                    </div>
+                    <div class="kv-container" id="staffKvContainer">
+                      <!-- Key-value rows -->
+                    </div>
+                  </div>
+
+                  <!-- Sub-Tab 4: Policy -->
+                  <div class="sub-tab-content" id="subtab-policy">
+                    <div class="kv-header-bar">
+                      <h4>Policy & Rules Dictionary</h4>
+                      <button class="btn btn-secondary btn-xs" id="btnAddPolicyRow"><i data-lucide="plus"></i> Add Policy Row</button>
+                    </div>
+                    <div class="kv-container" id="policyKvContainer">
+                      <!-- Key-value rows -->
+                    </div>
+                  </div>
+
+                  <!-- Sub-Tab 5: Custom Metadata -->
+                  <div class="sub-tab-content" id="subtab-custom">
+                    <div class="kv-header-bar">
+                      <h4>Custom Metadata Dictionary</h4>
+                      <button class="btn btn-secondary btn-xs" id="btnAddCustomRow"><i data-lucide="plus"></i> Add Custom Row</button>
+                    </div>
+                    <div class="kv-container" id="customKvContainer">
+                      <!-- Key-value rows -->
+                    </div>
+                  </div>
+                </div>
+
+                <div class="editor-actions mt-6">
+                  <button class="btn btn-success" id="btnSaveLoreEntry">
+                    <i data-lucide="check"></i> Save Lore Entry
+                  </button>
+                  <button class="btn btn-danger btn-outline" id="btnDeleteLoreEntry">
+                    <i data-lucide="trash-2"></i> Delete Entry
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty Selection View -->
+            <div id="emptyEditorView" class="editor-view text-center py-16">
+              <div class="empty-icon"><i data-lucide="book-open"></i></div>
+              <h3>No Lorebook or Lore Entry Selected</h3>
+              <p class="text-sub">Select an item from the left hierarchy tree to inspect and edit details.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 3: CATALOG & PRICING MANAGER -->
-      <section class="tab-page" id="page-catalog">
-        <div class="card glass">
-          <div class="card-header">
-            <div>
-              <h3><i data-lucide="shopping-cart"></i> Product Catalog & Dynamic Pricing Manager</h3>
-              <span class="card-subtitle">All prices are calculated in Copper ($1\text{ Gold} = 10,000\text{ Copper}$). Revenue & Net Profit recalculate in real-time.</span>
-            </div>
-            <button class="btn btn-success" id="btnSaveCatalog">
-              <i data-lucide="save"></i> Save Catalog & Recalculate Store Surplus
-            </button>
-          </div>
-          <div class="card-body">
-            <div class="table-responsive">
-              <table class="data-table" id="catalogTable">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th>Item Name</th>
-                    <th>Price (Copper)</th>
-                    <th>Unit Cost (Copper)</th>
-                    <th>Daily Sold</th>
-                    <th>Daily Gross (Gold)</th>
-                    <th>Daily Cost (Gold)</th>
-                    <th>Daily Net (Gold)</th>
-                  </tr>
-                </thead>
-                <tbody id="catalogTableBody">
-                  <!-- Dynamically populated -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- TAB 4: MUTATIONS & REDIS KEY MANAGER -->
-      <section class="tab-page" id="page-mutations">
+      <!-- TAB 2: CONTEXT SIMULATOR -->
+      <section class="tab-page" id="page-simulator">
         <div class="split-view">
           <div class="card glass flex-1">
             <div class="card-header">
-              <h3><i data-lucide="zap"></i> Manual State Mutation Runner</h3>
+              <h3><i data-lucide="terminal"></i> Input Conversation Simulator</h3>
             </div>
             <div class="card-body">
               <div class="form-group">
-                <label for="mutationAction">Mutation Action:</label>
-                <select id="mutationAction" class="form-select">
-                  <option value="UPDATE_VAR">UPDATE_VAR (Modify Variable)</option>
-                  <option value="UPSERT_ENTITY">UPSERT_ENTITY (Add/Update Entity)</option>
-                  <option value="DELETE_ENTITY">DELETE_ENTITY (Remove Entity)</option>
-                </select>
+                <label for="simSampleText">Sample User Request Message:</label>
+                <textarea id="simSampleText" class="form-textarea code-font" rows="6" placeholder="[ 🕒 Day 242] I am heading over to the YuriStore main branch to buy some bento boxes.">[ 🕒 Day 242] I am heading over to the YuriStore main branch to buy some bento boxes.</textarea>
               </div>
-
-              <div class="form-group">
-                <label for="mutationPath">Path / Domain:</label>
-                <input type="text" id="mutationPath" placeholder="e.g. financials.reserves.store_liquid_platinum" class="form-input">
-              </div>
-
-              <div class="form-group">
-                <label for="mutationOp">Operation (for UPDATE_VAR):</label>
-                <select id="mutationOp" class="form-select">
-                  <option value="SET">SET (Replace Value)</option>
-                  <option value="ADD">ADD (Increment Value)</option>
-                  <option value="SUB">SUB (Decrement Value)</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="mutationValue">Value / Payload JSON:</label>
-                <textarea id="mutationValue" placeholder="e.g. 50 or JSON object" class="form-textarea" rows="4"></textarea>
-              </div>
-
-              <button class="btn btn-accent w-full" id="btnExecuteMutation">
-                <i data-lucide="play"></i> Execute Mutation on Upstash
+              <button class="btn btn-accent w-full mt-4" id="btnRunSimulation">
+                <i data-lucide="play"></i> Run Context Compilation Engine
               </button>
             </div>
           </div>
 
           <div class="card glass flex-1">
             <div class="card-header">
-              <h3><i data-lucide="list"></i> Activity Log & Audit Trail</h3>
+              <h3><i data-lucide="file-output"></i> Compiled Markdown Prompt Output</h3>
+              <button class="btn btn-secondary btn-sm" id="btnCopyCompiledPrompt"><i data-lucide="copy"></i> Copy Output</button>
+            </div>
+            <div class="card-body">
+              <div class="sim-meta-bar mb-3">
+                <span class="badge badge-day" id="simOutDay">Extracted Day: Day 242</span>
+                <span class="badge badge-info" id="simOutCount">Active Lores: 1</span>
+                <span class="badge badge-purple" id="simOutTarget">Target: System Context</span>
+              </div>
+              <pre class="code-preview" id="simCompiledOutput">Run simulation to view compiled prompt context...</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: WORLD STATE & CASHFLOW -->
+      <section class="tab-page" id="page-worldstate">
+        <div class="card glass shadow-lg">
+          <div class="card-header">
+            <div>
+              <h3><i data-lucide="coins"></i> World State & Economic Engine</h3>
+              <span class="card-subtitle">Upstash Redis state domains & automated time progression</span>
+            </div>
+            <button class="btn btn-accent" id="btnAdvanceTime">
+              <i data-lucide="fast-forward"></i> Execute Time Skip (&Delta;t Tick)
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="stats-grid">
+              <div class="stat-card glass glow-primary">
+                <div class="stat-header"><span class="stat-title">Current World Timeline</span></div>
+                <div class="stat-value" id="wsCurrentDay">Day 242</div>
+              </div>
+              <div class="stat-card glass glow-success">
+                <div class="stat-header"><span class="stat-title">Ley Line Platinum Reserves</span></div>
+                <div class="stat-value" id="wsReservesPt">308,744.50 Pt</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: AUTHENTICATION & LOGS -->
+      <section class="tab-page" id="page-settings">
+        <div class="split-view">
+          <div class="card glass flex-1">
+            <div class="card-header">
+              <h3><i data-lucide="shield-check"></i> Client Authentication Key</h3>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label for="inputAuthKey">CLIENT_AUTH_KEY:</label>
+                <div class="password-input-wrapper">
+                  <input type="password" id="inputAuthKey" class="form-input" placeholder="Paste your CLIENT_AUTH_KEY here...">
+                  <button type="button" id="btnToggleAuthVisibility" class="btn-icon"><i data-lucide="eye"></i></button>
+                </div>
+              </div>
+              <button class="btn btn-primary w-full mt-4" id="btnSaveAuthKey">
+                <i data-lucide="key"></i> Save Key to LocalStorage
+              </button>
+            </div>
+          </div>
+
+          <div class="card glass flex-1">
+            <div class="card-header">
+              <h3><i data-lucide="list"></i> Operational Console Log</h3>
             </div>
             <div class="card-body">
               <div class="log-console" id="logConsole">
-                <div class="log-entry info">[SYSTEM] Upstash Redis connected. Ready for operations.</div>
+                <div class="log-entry info">[SYSTEM] Lorebook & State Manager Initialized.</div>
               </div>
             </div>
           </div>
@@ -291,57 +428,19 @@
     </main>
   </div>
 
-  <!-- Mobile Bottom Navigation Bar -->
-  <nav class="mobile-bottom-nav">
-    <button class="mobile-nav-item active" data-tab="dashboard">
-      <i data-lucide="layout-dashboard"></i>
-      <span>Dashboard</span>
-    </button>
-    <button class="mobile-nav-item" data-tab="lorebook">
-      <i data-lucide="book-open"></i>
-      <span>Lorebook</span>
-    </button>
-    <button class="mobile-nav-item" data-tab="catalog">
-      <i data-lucide="shopping-bag"></i>
-      <span>Catalog</span>
-    </button>
-    <button class="mobile-nav-item" data-tab="mutations">
-      <i data-lucide="sliders"></i>
-      <span>Mutations</span>
-    </button>
-  </nav>
-
-  <!-- Authentication Modal Overlay -->
-  <div class="modal-overlay hidden" id="authModal">
+  <!-- Import / Export Modal -->
+  <div class="modal-overlay hidden" id="jsonModal">
     <div class="modal-card glass glow-primary">
       <div class="modal-header">
-        <div class="modal-brand">
-          <div class="brand-icon">
-            <i data-lucide="shield-check"></i>
-          </div>
-          <div>
-            <h3>Xác thực CLIENT_AUTH_KEY</h3>
-            <span class="modal-subtitle">Nhập CLIENT_AUTH_KEY để truy cập Yuri Systems</span>
-          </div>
+        <h3 id="modalTitle">Import JSON Database</h3>
+        <button class="btn-icon" id="btnCloseModal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <textarea id="jsonModalArea" class="json-editor" rows="12" placeholder="Paste JSON payload here..."></textarea>
+        <div class="modal-actions mt-4">
+          <button class="btn btn-primary w-full" id="btnSubmitModalJson">Submit & Overwrite</button>
         </div>
       </div>
-      <form id="authForm" class="modal-body">
-        <div class="form-group">
-          <label for="inputAuthKey">CLIENT_AUTH_KEY:</label>
-          <div class="password-input-wrapper">
-            <input type="password" id="inputAuthKey" placeholder="Dán CLIENT_AUTH_KEY của bạn vào đây..." class="form-input" required autocomplete="current-password">
-            <button type="button" id="btnToggleAuthVisibility" class="btn-icon" title="Hiện/Ẩn Key">
-              <i data-lucide="eye"></i>
-            </button>
-          </div>
-        </div>
-        <div id="authErrorMessage" class="auth-error-msg hidden"></div>
-        <div class="modal-actions mt-4">
-          <button type="submit" class="btn btn-primary w-full" id="btnSubmitAuth">
-            <i data-lucide="log-in"></i> Đăng nhập / Lưu Key
-          </button>
-        </div>
-      </form>
     </div>
   </div>
 

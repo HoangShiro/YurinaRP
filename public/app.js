@@ -1,639 +1,732 @@
-// app.js — Frontend Application Logic for Yuri Systems World State Manager
+// app.js — Frontend Application Engine for Lorebook & World State Control Center
+// Standardized in 100% English
 
-let stateData = null;
-let currentSelectedDomain = 'meta';
+(function () {
+  'use strict';
 
-const AUTH_KEY_STORAGE = 'yuri_client_auth_key';
+  // State Management
+  const state = {
+    authKey: localStorage.getItem('CLIENT_AUTH_KEY') || '',
+    lorebookStore: { lorebooks: [] },
+    selectedLbId: null,
+    selectedLoreId: null,
+    currentSubTab: 'definition'
+  };
 
-document.addEventListener('DOMContentLoaded', async () => {
-  if (window.lucide) lucide.createIcons();
+  // DOM Elements
+  const el = {
+    // Navigation
+    navButtons: document.querySelectorAll('.nav-menu .nav-item, .mobile-bottom-nav .mobile-nav-item'),
+    tabPages: document.querySelectorAll('.tab-page'),
+    pageTitle: document.getElementById('pageTitle'),
+    mobileNavToggle: document.getElementById('mobileNavToggle'),
+    sidebarBackdrop: document.getElementById('sidebarBackdrop'),
+    sidebar: document.querySelector('.sidebar'),
 
-  initNavigation();
-  initDomainSelector();
-  initEventListeners();
-  initAuthForm();
+    // Global Buttons
+    btnSaveStore: document.getElementById('btnSaveStore'),
+    btnExportDb: document.getElementById('btnExportDb'),
+    btnImportDb: document.getElementById('btnImportDb'),
+    btnAddLorebook: document.getElementById('btnAddLorebook'),
 
-  const isAuth = await initAuth();
-  if (isAuth) {
-    loadWorldState();
+    // Tree
+    treeContainer: document.getElementById('treeContainer'),
+
+    // Views
+    lorebookEditorView: document.getElementById('lorebookEditorView'),
+    loreEditorView: document.getElementById('loreEditorView'),
+    emptyEditorView: document.getElementById('emptyEditorView'),
+
+    // Lorebook Form
+    lbEditTitle: document.getElementById('lbEditTitle'),
+    lbStatusSelect: document.getElementById('lbStatusSelect'),
+    lbNameInput: document.getElementById('lbNameInput'),
+    lbInsertionSelect: document.getElementById('lbInsertionSelect'),
+    lbDescInput: document.getElementById('lbDescInput'),
+    lbPatternsInput: document.getElementById('lbPatternsInput'),
+    lbDepthInput: document.getElementById('lbDepthInput'),
+    btnSaveLbSettings: document.getElementById('btnSaveLbSettings'),
+    btnAddLoreUnderLb: document.getElementById('btnAddLoreUnderLb'),
+    btnDeleteLorebook: document.getElementById('btnDeleteLorebook'),
+
+    // Lore Form
+    loreEditTitle: document.getElementById('loreEditTitle'),
+    loreEditSubtitle: document.getElementById('loreEditSubtitle'),
+    loreGroupHeadCheckbox: document.getElementById('loreGroupHeadCheckbox'),
+    loreNameInput: document.getElementById('loreNameInput'),
+    loreGroupInput: document.getElementById('loreGroupInput'),
+    loreKeywordsInput: document.getElementById('loreKeywordsInput'),
+    loreRateInput: document.getElementById('loreRateInput'),
+    subTabs: document.querySelectorAll('.sub-tab'),
+    subTabContents: document.querySelectorAll('.sub-tab-content'),
+    loreDefInput: document.getElementById('loreDefInput'),
+    btnAddCatalogItem: document.getElementById('btnAddCatalogItem'),
+    catalogTableBody: document.getElementById('catalogTableBody'),
+    catalogCalcPreview: document.getElementById('catalogCalcPreview'),
+    btnAddStaffRow: document.getElementById('btnAddStaffRow'),
+    staffKvContainer: document.getElementById('staffKvContainer'),
+    btnAddPolicyRow: document.getElementById('btnAddPolicyRow'),
+    policyKvContainer: document.getElementById('policyKvContainer'),
+    btnAddCustomRow: document.getElementById('btnAddCustomRow'),
+    customKvContainer: document.getElementById('customKvContainer'),
+    btnSaveLoreEntry: document.getElementById('btnSaveLoreEntry'),
+    btnDeleteLoreEntry: document.getElementById('btnDeleteLoreEntry'),
+
+    // Simulator
+    simSampleText: document.getElementById('simSampleText'),
+    btnRunSimulation: document.getElementById('btnRunSimulation'),
+    simCompiledOutput: document.getElementById('simCompiledOutput'),
+    simOutDay: document.getElementById('simOutDay'),
+    simOutCount: document.getElementById('simOutCount'),
+    simOutTarget: document.getElementById('simOutTarget'),
+    btnCopyCompiledPrompt: document.getElementById('btnCopyCompiledPrompt'),
+
+    // Auth & Logs
+    inputAuthKey: document.getElementById('inputAuthKey'),
+    btnToggleAuthVisibility: document.getElementById('btnToggleAuthVisibility'),
+    btnSaveAuthKey: document.getElementById('btnSaveAuthKey'),
+    logConsole: document.getElementById('logConsole'),
+
+    // Modal
+    jsonModal: document.getElementById('jsonModal'),
+    modalTitle: document.getElementById('modalTitle'),
+    jsonModalArea: document.getElementById('jsonModalArea'),
+    btnCloseModal: document.getElementById('btnCloseModal'),
+    btnSubmitModalJson: document.getElementById('btnSubmitModalJson')
+  };
+
+  // Helper Functions
+  function log(msg, type = 'info') {
+    if (!el.logConsole) return;
+    const div = document.createElement('div');
+    div.className = `log-entry ${type}`;
+    const timestamp = new Date().toLocaleTimeString();
+    div.textContent = `[${timestamp}] ${msg}`;
+    el.logConsole.appendChild(div);
+    el.logConsole.scrollTop = el.logConsole.scrollHeight;
   }
-});
 
-// Authentication Management
-function getAuthKey() {
-  return localStorage.getItem(AUTH_KEY_STORAGE) || '';
-}
-
-function setAuthKey(key) {
-  localStorage.setItem(AUTH_KEY_STORAGE, key);
-}
-
-function clearAuthKey() {
-  localStorage.removeItem(AUTH_KEY_STORAGE);
-}
-
-function getAuthHeaders() {
-  const headers = { 'Content-Type': 'application/json' };
-  const key = getAuthKey();
-  if (key) {
-    headers['Authorization'] = `Bearer ${key}`;
+  function generateId(prefix = 'id') {
+    return `${prefix}_${Math.random().toString(36).substring(2, 9)}`;
   }
-  return headers;
-}
 
-async function verifyKey(key) {
-  try {
-    const res = await fetch('/v1/auth/verify', {
-      headers: { 'Authorization': `Bearer ${key}` }
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok !== false) {
-      return { ok: true, message: data.message || 'Xác thực thành công' };
+  function getHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.authKey) {
+      headers['Authorization'] = `Bearer ${state.authKey}`;
     }
-    return { ok: false, message: data.message || data.error?.message || `Lỗi xác thực (HTTP ${res.status})` };
-  } catch (err) {
-    return { ok: false, message: `Lỗi kết nối server: ${err.message}` };
-  }
-}
-
-function showAuthModal(errMsg = '') {
-  const modal = document.getElementById('authModal');
-  const errEl = document.getElementById('authErrorMessage');
-  const input = document.getElementById('inputAuthKey');
-
-  if (input) input.value = getAuthKey();
-
-  if (errMsg && errEl) {
-    errEl.textContent = errMsg;
-    errEl.classList.remove('hidden');
-  } else if (errEl) {
-    errEl.classList.add('hidden');
+    return headers;
   }
 
-  if (modal) modal.classList.remove('hidden');
-}
-
-function hideAuthModal() {
-  const modal = document.getElementById('authModal');
-  if (modal) modal.classList.add('hidden');
-}
-
-function updateAuthStatusUI(isAuthenticated) {
-  const statusText = document.getElementById('authStatusText');
-  const btnAuth = document.getElementById('btnAuthSettings');
-
-  if (isAuthenticated) {
-    if (statusText) statusText.textContent = 'Auth Key Active';
-    if (btnAuth) {
-      btnAuth.classList.remove('btn-secondary');
-      btnAuth.classList.add('btn-success');
+  // --- TAB NAVIGATION ---
+  function switchTab(tabId) {
+    el.navButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    el.tabPages.forEach(page => {
+      page.classList.toggle('active', page.id === `page-${tabId}`);
+    });
+    if (el.pageTitle) {
+      const titles = {
+        lorebooks: 'Lorebook Database Management',
+        simulator: 'Context Simulation & Dry-Run Engine',
+        worldstate: 'World State & Financial Ledger',
+        settings: 'Authentication & System Audit Log'
+      };
+      el.pageTitle.textContent = titles[tabId] || 'Control Center';
     }
-  } else {
-    if (statusText) statusText.textContent = 'Login Required';
-    if (btnAuth) {
-      btnAuth.classList.remove('btn-success');
-      btnAuth.classList.add('btn-secondary');
+    if (window.innerWidth <= 768) {
+      el.sidebar.classList.remove('open');
+      el.sidebarBackdrop.classList.remove('show');
     }
   }
-}
 
-async function initAuth() {
-  const savedKey = getAuthKey();
-  if (!savedKey) {
-    updateAuthStatusUI(false);
-    showAuthModal();
-    return false;
-  }
-
-  const result = await verifyKey(savedKey);
-  if (result.ok) {
-    updateAuthStatusUI(true);
-    hideAuthModal();
-    return true;
-  } else {
-    updateAuthStatusUI(false);
-    showAuthModal(result.message);
-    return false;
-  }
-}
-
-function initAuthForm() {
-  const form = document.getElementById('authForm');
-  const btnToggle = document.getElementById('btnToggleAuthVisibility');
-  const inputKey = document.getElementById('inputAuthKey');
-  const btnSettings = document.getElementById('btnAuthSettings');
-
-  if (btnSettings) {
-    btnSettings.addEventListener('click', () => {
-      showAuthModal();
-    });
-  }
-
-  if (btnToggle && inputKey) {
-    btnToggle.addEventListener('click', () => {
-      const type = inputKey.type === 'password' ? 'text' : 'password';
-      inputKey.type = type;
-    });
-  }
-
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const errEl = document.getElementById('authErrorMessage');
-      const submitBtn = document.getElementById('btnSubmitAuth');
-      const key = inputKey.value.trim();
-
-      if (!key) {
-        if (errEl) {
-          errEl.textContent = 'Vui lòng nhập CLIENT_AUTH_KEY!';
-          errEl.classList.remove('hidden');
-        }
-        return;
-      }
-
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Đang xác thực...';
-      }
-
-      const result = await verifyKey(key);
-
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i data-lucide="log-in"></i> Đăng nhập / Lưu Key';
-        if (window.lucide) lucide.createIcons();
-      }
-
-      if (result.ok) {
-        setAuthKey(key);
-        updateAuthStatusUI(true);
-        hideAuthModal();
-        logConsole('success', 'Xác thực CLIENT_AUTH_KEY thành công!');
-        loadWorldState();
+  // --- API CALLS ---
+  async function loadLorebookStore() {
+    try {
+      log('Fetching LorebookStore from server...', 'info');
+      const res = await fetch('/v1/lorebooks', { headers: getHeaders() });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      if (data && data.store && Array.isArray(data.store.lorebooks)) {
+        state.lorebookStore = data.store;
+        log(`Loaded ${state.lorebookStore.lorebooks.length} Lorebook(s) successfully.`, 'success');
       } else {
-        if (errEl) {
-          errEl.textContent = result.message;
-          errEl.classList.remove('hidden');
-        }
+        log('Server returned empty store format.', 'warn');
       }
-    });
-  }
-}
-
-// Navigation Setup
-function initNavigation() {
-  const navButtons = document.querySelectorAll('.nav-item, .mobile-nav-item');
-  const pages = document.querySelectorAll('.tab-page');
-  const pageTitle = document.getElementById('pageTitle');
-
-  const pageTitles = {
-    dashboard: 'Dashboard & Time Simulation',
-    lorebook: 'Lorebook & World State Engine',
-    catalog: 'Product Catalog & Dynamic Pricing',
-    mutations: 'State Mutations & Upstash Redis'
-  };
-
-  const sidebar = document.querySelector('.sidebar');
-  const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-  const mobileToggle = document.getElementById('mobileNavToggle');
-
-  function closeSidebar() {
-    if (sidebar) sidebar.classList.remove('open');
-    if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
-  }
-
-  function toggleSidebar() {
-    if (!sidebar) return;
-    const isOpen = sidebar.classList.toggle('open');
-    if (sidebarBackdrop) {
-      if (isOpen) sidebarBackdrop.classList.add('active');
-      else sidebarBackdrop.classList.remove('active');
+      renderHierarchyTree();
+    } catch (err) {
+      log(`Failed to fetch LorebookStore: ${err.message}`, 'error');
     }
   }
 
-  navButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tabTarget = btn.getAttribute('data-tab');
+  async function saveLorebookStore() {
+    try {
+      log('Saving LorebookStore to server...', 'info');
+      const res = await fetch('/v1/lorebooks', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(state.lorebookStore)
+      });
+      if (!res.ok) throw new Error(`Save failed with HTTP ${res.status}`);
+      const data = await res.json();
+      log(data.message || 'LorebookStore saved successfully!', 'success');
+    } catch (err) {
+      log(`Save LorebookStore error: ${err.message}`, 'error');
+    }
+  }
 
-      navButtons.forEach(b => {
-        if (b.getAttribute('data-tab') === tabTarget) {
-          b.classList.add('active');
-        } else {
-          b.classList.remove('active');
-        }
+  // --- TREE RENDERING ---
+  function renderHierarchyTree() {
+    el.treeContainer.innerHTML = '';
+    const lorebooks = state.lorebookStore.lorebooks || [];
+
+    if (lorebooks.length === 0) {
+      el.treeContainer.innerHTML = `<div class="text-sub p-4 text-center">No lorebooks available. Click "+ New Book" to create one.</div>`;
+      return;
+    }
+
+    lorebooks.forEach(lb => {
+      const lbNode = document.createElement('div');
+      lbNode.className = `tree-lb-node ${state.selectedLbId === lb.id && !state.selectedLoreId ? 'active' : ''}`;
+      
+      const badgeClass = `badge-status-${(lb.status || 'Active').toLowerCase()}`;
+      
+      lbNode.innerHTML = `
+        <div class="lb-header-row" data-lbid="${lb.id}">
+          <div class="lb-title-group">
+            <i data-lucide="book"></i>
+            <span class="lb-name">${lb.name || 'Untitled Lorebook'}</span>
+          </div>
+          <span class="badge ${badgeClass}">${lb.status || 'Active'}</span>
+        </div>
+      `;
+
+      // Groups & Lores
+      const loresContainer = document.createElement('div');
+      loresContainer.className = 'tree-lores-group';
+
+      const groupsMap = new Map();
+      (lb.lores || []).forEach(lore => {
+        const grp = lore.group || 'General';
+        if (!groupsMap.has(grp)) groupsMap.set(grp, []);
+        groupsMap.get(grp).push(lore);
       });
 
-      pages.forEach(p => {
-        if (p.id === `page-${tabTarget}`) {
-          p.classList.add('active');
-        } else {
-          p.classList.remove('active');
-        }
+      groupsMap.forEach((loresList, grpName) => {
+        const grpHeader = document.createElement('div');
+        grpHeader.className = 'tree-grp-header';
+        grpHeader.innerHTML = `<i data-lucide="folder"></i> <span>Group: ${grpName}</span>`;
+        loresContainer.appendChild(grpHeader);
+
+        loresList.forEach(lore => {
+          const loreItem = document.createElement('div');
+          loreItem.className = `tree-lore-item ${state.selectedLoreId === lore.id ? 'active' : ''}`;
+          loreItem.dataset.lbid = lb.id;
+          loreItem.dataset.loreid = lore.id;
+
+          const headBadge = lore.is_group_head ? `<span class="head-badge" title="Group Head"><i data-lucide="crown"></i></span>` : '';
+          
+          loreItem.innerHTML = `
+            <div class="lore-title-group">
+              <i data-lucide="file-text"></i>
+              <span>${lore.name || 'Untitled Lore'}</span>
+              ${headBadge}
+            </div>
+          `;
+
+          loreItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectLoreEntry(lb.id, lore.id);
+          });
+
+          loresContainer.appendChild(loreItem);
+        });
       });
 
-      if (pageTitle && pageTitles[tabTarget]) {
-        pageTitle.textContent = pageTitles[tabTarget];
+      lbNode.querySelector('.lb-header-row').addEventListener('click', () => {
+        selectLorebook(lb.id);
+      });
+
+      lbNode.appendChild(loresContainer);
+      el.treeContainer.appendChild(lbNode);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  // --- SELECTION & EDITOR MANAGERS ---
+  function selectLorebook(lbId) {
+    state.selectedLbId = lbId;
+    state.selectedLoreId = null;
+    renderHierarchyTree();
+
+    const lb = state.lorebookStore.lorebooks.find(b => b.id === lbId);
+    if (!lb) return;
+
+    el.emptyEditorView.classList.add('hidden');
+    el.loreEditorView.classList.add('hidden');
+    el.lorebookEditorView.classList.remove('hidden');
+
+    el.lbEditTitle.textContent = `Lorebook Settings: ${lb.name}`;
+    el.lbStatusSelect.value = lb.status || 'Active';
+    el.lbNameInput.value = lb.name || '';
+    el.lbInsertionSelect.value = lb.settings?.insertion_mode || 'context';
+    el.lbDescInput.value = lb.description || '';
+    el.lbPatternsInput.value = (lb.settings?.day_trigger_patterns || []).join('\n');
+    el.lbDepthInput.value = lb.settings?.depth_scan || 2;
+  }
+
+  function selectLoreEntry(lbId, loreId) {
+    state.selectedLbId = lbId;
+    state.selectedLoreId = loreId;
+    renderHierarchyTree();
+
+    const lb = state.lorebookStore.lorebooks.find(b => b.id === lbId);
+    if (!lb) return;
+    const lore = (lb.lores || []).find(l => l.id === loreId);
+    if (!lore) return;
+
+    el.emptyEditorView.classList.add('hidden');
+    el.lorebookEditorView.classList.add('hidden');
+    el.loreEditorView.classList.remove('hidden');
+
+    el.loreEditTitle.textContent = `Edit Lore Entry: ${lore.name}`;
+    el.loreEditSubtitle.textContent = `Lorebook: ${lb.name} | Group: ${lore.group || 'General'}`;
+    el.loreGroupHeadCheckbox.checked = !!lore.is_group_head;
+    el.loreNameInput.value = lore.name || '';
+    el.loreGroupInput.value = lore.group || 'General';
+
+    el.loreKeywordsInput.value = (lore.trigger?.keywords || []).join(', ');
+    el.loreRateInput.value = typeof lore.trigger?.trigger_rate === 'number' ? lore.trigger.trigger_rate : 100;
+
+    const area = lore.prompt_area || {};
+    el.loreDefInput.value = area.definition || '';
+
+    renderCatalogTable(area.catalog || []);
+    renderKvContainer(el.staffKvContainer, area.staff || {});
+    renderKvContainer(el.policyKvContainer, area.policy || {});
+    renderKvContainer(el.customKvContainer, area.custom_data || {});
+  }
+
+  // --- CATALOG TABLE & CALCULATION ---
+  function renderCatalogTable(catalog) {
+    el.catalogTableBody.innerHTML = '';
+    catalog.forEach((item, index) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="form-input form-input-sm cat-name" value="${item.name || ''}" placeholder="Item Name"></td>
+        <td>
+          <select class="form-select form-select-sm cat-type">
+            <option value="retail" ${item.type === 'retail' ? 'selected' : ''}>Retail Item</option>
+            <option value="ticket" ${item.type === 'ticket' ? 'selected' : ''}>Ticket</option>
+            <option value="food" ${item.type === 'food' ? 'selected' : ''}>Food / Beverage</option>
+            <option value="fee_revenue_share" ${item.type === 'fee_revenue_share' ? 'selected' : ''}>Fee / Revenue Share</option>
+          </select>
+        </td>
+        <td><input type="number" class="form-input form-input-sm cat-price" value="${item.price_copper || 0}"></td>
+        <td><input type="number" class="form-input form-input-sm cat-cost" value="${item.unit_cost_copper || 0}"></td>
+        <td><input type="number" class="form-input form-input-sm cat-sold" value="${item.daily_units_sold || 0}"></td>
+        <td><input type="text" class="form-input form-input-sm cat-val" value="${item.value || ''}" placeholder="e.g. -50% or -5000"></td>
+        <td>
+          <button class="btn-icon btn-icon-danger btn-delete-cat" data-index="${index}" title="Remove Item">
+            <i data-lucide="trash"></i>
+          </button>
+        </td>
+      `;
+      el.catalogTableBody.appendChild(tr);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+    updateCatalogPreview(catalog);
+  }
+
+  function getCatalogFromForm() {
+    const catalog = [];
+    const rows = el.catalogTableBody.querySelectorAll('tr');
+    rows.forEach(tr => {
+      const name = tr.querySelector('.cat-name').value.trim();
+      const type = tr.querySelector('.cat-type').value;
+      const price_copper = parseInt(tr.querySelector('.cat-price').value, 10) || 0;
+      const unit_cost_copper = parseInt(tr.querySelector('.cat-cost').value, 10) || 0;
+      const daily_units_sold = parseInt(tr.querySelector('.cat-sold').value, 10) || 0;
+      const value = tr.querySelector('.cat-val').value.trim();
+
+      if (name) {
+        catalog.push({
+          id: generateId('item'),
+          name,
+          type,
+          price_copper,
+          unit_cost_copper,
+          daily_units_sold,
+          monthly_units_sold: daily_units_sold * 30,
+          sold_out: false,
+          start_date: 1,
+          branches: 1,
+          value,
+          description: type === 'fee_revenue_share' ? 'Dynamic fee/revenue sharing formula' : ''
+        });
       }
-
-      // Auto close sidebar on mobile after selecting a tab
-      closeSidebar();
     });
-  });
-
-  // Mobile sidebar toggle button
-  if (mobileToggle) {
-    mobileToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleSidebar();
-    });
+    return catalog;
   }
 
-  // Close sidebar when clicking backdrop
-  if (sidebarBackdrop) {
-    sidebarBackdrop.addEventListener('click', closeSidebar);
-  }
+  function updateCatalogPreview(catalog) {
+    let gross = 0;
+    let cost = 0;
+    let fees = 0;
 
-  // Close sidebar when clicking anywhere outside on mobile
-  document.addEventListener('click', (e) => {
-    if (sidebar && sidebar.classList.contains('open')) {
-      if (!sidebar.contains(e.target) && !mobileToggle?.contains(e.target)) {
-        closeSidebar();
+    catalog.forEach(item => {
+      if (item.type === 'fee_revenue_share') return;
+      const p = item.price_copper || 0;
+      const c = item.unit_cost_copper || 0;
+      const s = item.daily_units_sold || 0;
+      gross += p * s;
+      cost += c * s;
+    });
+
+    catalog.forEach(item => {
+      if (item.type !== 'fee_revenue_share') return;
+      const valStr = String(item.value || '0').trim();
+      if (valStr.endsWith('%')) {
+        const pct = parseFloat(valStr.replace('%', '')) || 0;
+        fees += Math.round(gross * (pct / 100));
+      } else {
+        fees += parseInt(valStr, 10) || 0;
       }
-    }
-  });
-}
-
-// Domain Chip Selector
-function initDomainSelector() {
-  const chips = document.querySelectorAll('.chip');
-  chips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      chips.forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-
-      currentSelectedDomain = chip.getAttribute('data-domain');
-      document.getElementById('selectedDomainTitle').textContent = currentSelectedDomain;
-
-      renderSelectedDomainJson();
-    });
-  });
-}
-
-// Event Listeners
-function initEventListeners() {
-  document.getElementById('btnQuickRefresh').addEventListener('click', loadWorldState);
-  document.getElementById('btnAdvanceTime').addEventListener('click', executeTimeAdvance);
-  document.getElementById('btnSaveCatalog').addEventListener('click', saveCatalogData);
-  document.getElementById('btnSaveDomainJson').addEventListener('click', saveDomainJsonData);
-  document.getElementById('btnExecuteMutation').addEventListener('click', executeManualMutation);
-
-  document.getElementById('btnCopySnapshot').addEventListener('click', () => {
-    const text = document.getElementById('previewSnapshot').textContent;
-    navigator.clipboard.writeText(text);
-    logConsole('success', 'Copied prompt snapshot to clipboard!');
-  });
-}
-
-// Load Full World State from Proxy API (/v1/worldstate)
-async function loadWorldState() {
-  try {
-    logConsole('info', 'Fetching World State from Proxy Server...');
-    const res = await fetch('/v1/worldstate', {
-      headers: getAuthHeaders()
     });
 
-    if (res.status === 403) {
-      showAuthModal('Cần đăng nhập hoặc CLIENT_AUTH_KEY không hợp lệ!');
-      updateAuthStatusUI(false);
-      throw new Error('HTTP 403 Forbidden');
-    }
+    const net = gross - cost + fees;
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    if (data.status !== 'ok') throw new Error('API returned non-ok status');
-
-    stateData = data.state;
-
-    // Update Header Badges
-    const currentDay = stateData.meta?.current_day || 242;
-    const leyLinePt = stateData.financials?.reserves?.ley_line_platinum || 308744.5;
-
-    document.getElementById('headerCurrentDay').textContent = `Day ${currentDay}`;
-    document.getElementById('headerPlatinumReserves').textContent = `${leyLinePt.toLocaleString()} Pt`;
-
-    // Render Tab 1 Dashboard
-    renderDashboard(data.snapshot);
-
-    // Render Tab 2 Lorebook JSON
-    renderSelectedDomainJson();
-
-    // Render Tab 3 Catalog
-    renderCatalogTable();
-
-    logConsole('success', `Loaded World State successfully (Day ${currentDay}, Ley Line: ${leyLinePt.toLocaleString()} Pt)`);
-  } catch (err) {
-    logConsole('error', `Failed to load World State: ${err.message}`);
-  }
-}
-
-// Render Tab 1 Dashboard Components
-function renderDashboard(snapshotText) {
-  if (!stateData) return;
-
-  const fin = stateData.financials || {};
-  const res = fin.reserves || {};
-  const sys = fin.systems || {};
-
-  document.getElementById('dashLeyLinePt').textContent = `${(res.ley_line_platinum || 308744.5).toLocaleString()} Pt`;
-  document.getElementById('dashDailyNetGold').textContent = `${(fin.consolidated_daily_net_surplus_gold || 300513).toLocaleString()} Gold/day`;
-  
-  let grossGoldSum = 0;
-  let hostShareSum = 0;
-  for (const s of Object.values(sys)) {
-    grossGoldSum += (s.daily_gross_revenue || 0);
-    hostShareSum += (s.host_share || 0);
-  }
-
-  document.getElementById('dashDailyGrossGold').textContent = `${Math.round(grossGoldSum).toLocaleString()} Gold/day`;
-  document.getElementById('dashHostShareGold').textContent = `${Math.round(hostShareSum).toLocaleString()} Gold/day`;
-
-  // Render Prompt Snapshot Text
-  document.getElementById('previewSnapshot').textContent = snapshotText || '';
-
-  // Render Systems Financial Breakdown Cards
-  const container = document.getElementById('systemsGridContainer');
-  container.innerHTML = '';
-
-  const systemNames = {
-    yuri_store: 'YuriStore Main & Retail',
-    yuri_cosmetics: 'YuriCosmetics Network',
-    yuri_station: 'YuriStation Transit',
-    yuri_train: 'YuriTrain Railway System',
-    wand_leasing: 'YuriConstruct Wand Leasing',
-    yuri_bank: 'YuriBank Ley Line Infrastructure'
-  };
-
-  for (const [key, s] of Object.entries(sys)) {
-    const title = systemNames[key] || key;
-    const gross = s.daily_gross_revenue || 0;
-    const burn = s.daily_operating_burn || 0;
-    const hostShare = s.host_share || 0;
-    const net = s.daily_net_surplus_evaluated !== undefined ? s.daily_net_surplus_evaluated : (gross - burn - hostShare);
-
-    const card = document.createElement('div');
-    card.className = 'system-card glass';
-    card.innerHTML = `
-      <div class="system-card-header">
-        <span class="system-card-title">${title}</span>
-        <span class="badge ${net >= 0 ? 'badge-day' : 'badge-platinum'}">${net >= 0 ? '+' : ''}${Math.round(net).toLocaleString()} G/day</span>
+    el.catalogCalcPreview.innerHTML = `
+      <div class="calc-metric-card">
+        <span class="label">Total Daily Gross</span>
+        <span class="val text-success">${gross.toLocaleString()} Copper</span>
       </div>
-      <div class="system-metrics">
-        <div class="metric-row">
-          <span>Daily Gross Income:</span>
-          <span>${Math.round(gross).toLocaleString()} Gold</span>
-        </div>
-        <div class="metric-row">
-          <span>Operating Burn / Cost:</span>
-          <span>${Math.round(burn).toLocaleString()} Gold</span>
-        </div>
-        ${hostShare > 0 ? `
-        <div class="metric-row">
-          <span>Host Nations Profit Share (50%):</span>
-          <span>${Math.round(hostShare).toLocaleString()} Gold</span>
-        </div>` : ''}
-        <div class="metric-row highlight">
-          <span>YuriStore Net Surplus:</span>
-          <span>${Math.round(net).toLocaleString()} Gold/day</span>
-        </div>
+      <div class="calc-metric-card">
+        <span class="label">Operational Costs</span>
+        <span class="val text-warning">${cost.toLocaleString()} Copper</span>
+      </div>
+      <div class="calc-metric-card">
+        <span class="label">Fees & Revenue Share</span>
+        <span class="val ${fees >= 0 ? 'text-success' : 'text-danger'}">${fees >= 0 ? '+' : ''}${fees.toLocaleString()} Copper</span>
+      </div>
+      <div class="calc-metric-card">
+        <span class="label">Daily Net Surplus</span>
+        <span class="val text-primary">${net.toLocaleString()} Copper</span>
       </div>
     `;
-    container.appendChild(card);
   }
-}
 
-// Execute Time Progression (Δt Tick)
-async function executeTimeAdvance() {
-  const deltaDaysInput = document.getElementById('inputDeltaDays');
-  const deltaDays = parseInt(deltaDaysInput.value, 10) || 1;
+  // --- KEY-VALUE DICTIONARY HELPERS ---
+  function renderKvContainer(container, dict) {
+    container.innerHTML = '';
+    Object.entries(dict || {}).forEach(([key, val]) => {
+      addKvRow(container, key, typeof val === 'object' ? JSON.stringify(val) : val);
+    });
+  }
 
-  try {
-    logConsole('warn', `Executing Time Advance by +${deltaDays} day(s)...`);
-    const res = await fetch('/v1/worldstate/tick', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ delta_days: deltaDays })
+  function addKvRow(container, key = '', val = '') {
+    const row = document.createElement('div');
+    row.className = 'kv-row mt-2';
+    row.innerHTML = `
+      <input type="text" class="form-input form-input-sm kv-key" value="${key}" placeholder="Key / Title">
+      <input type="text" class="form-input form-input-sm kv-val" value="${val}" placeholder="Value / Content">
+      <button class="btn-icon btn-icon-danger btn-delete-kv"><i data-lucide="trash"></i></button>
+    `;
+    row.querySelector('.btn-delete-kv').addEventListener('click', () => row.remove());
+    container.appendChild(row);
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function getDictFromKvContainer(container) {
+    const dict = {};
+    const rows = container.querySelectorAll('.kv-row');
+    rows.forEach(row => {
+      const k = row.querySelector('.kv-key').value.trim();
+      const v = row.querySelector('.kv-val').value.trim();
+      if (k) dict[k] = v;
+    });
+    return dict;
+  }
+
+  // --- EVENT LISTENERS ---
+  function bindEvents() {
+    // Navigation
+    el.navButtons.forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    if (res.status === 403) {
-      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
-      updateAuthStatusUI(false);
-      throw new Error('HTTP 403 Forbidden');
-    }
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    logConsole('success', `Advanced simulation by +${deltaDays} day(s). Current Day: Day ${data.current_day}`);
-    
-    await loadWorldState();
-  } catch (err) {
-    logConsole('error', `Time advance failed: ${err.message}`);
-  }
-}
-
-// Render Domain JSON in Editor
-function renderSelectedDomainJson() {
-  if (!stateData) return;
-  const domainData = stateData[currentSelectedDomain] || {};
-  document.getElementById('jsonEditorDomain').value = JSON.stringify(domainData, null, 2);
-}
-
-// Save Domain JSON Data back to Upstash
-async function saveDomainJsonData() {
-  try {
-    const rawJson = document.getElementById('jsonEditorDomain').value;
-    const parsedData = JSON.parse(rawJson);
-
-    logConsole('info', `Saving domain '${currentSelectedDomain}' to Upstash Redis...`);
-
-    const res = await fetch('/v1/worldstate/save_domain', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ domain: currentSelectedDomain, data: parsedData })
-    });
-
-    if (res.status === 403) {
-      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
-      updateAuthStatusUI(false);
-      throw new Error('HTTP 403 Forbidden');
-    }
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    logConsole('success', `Saved domain '${currentSelectedDomain}' to Upstash Redis!`);
-    await loadWorldState();
-  } catch (err) {
-    logConsole('error', `Failed to save domain '${currentSelectedDomain}': ${err.message}`);
-  }
-}
-
-// Render Tab 3 Product Catalog Table
-function renderCatalogTable() {
-  if (!stateData || !stateData.catalog) return;
-
-  const catalog = stateData.catalog;
-  const tbody = document.getElementById('catalogTableBody');
-  tbody.innerHTML = '';
-
-  const categories = [
-    { key: 'retail_items', label: 'Retail Goods' },
-    { key: 'fast_food_menu', label: 'Fast Food' },
-    { key: 'restaurant_menu', label: 'Restaurant' },
-    { key: 'yuribank_cards', label: 'YuriBank Cards' }
-  ];
-
-  categories.forEach(cat => {
-    const items = catalog[cat.key];
-    if (Array.isArray(items)) {
-      items.forEach((item, idx) => {
-        const priceCopper = item.price_copper || 0;
-        const costCopper = item.unit_cost_copper || 0;
-        const sold = item.daily_units_sold || 0;
-
-        const grossGold = Math.round((priceCopper * sold / 10000) * 100) / 100;
-        const costGold = Math.round((costCopper * sold / 10000) * 100) / 100;
-        const netGold = Math.round((grossGold - costGold) * 100) / 100;
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><span class="chip">${cat.label}</span></td>
-          <td><strong>${item.name || item.id}</strong></td>
-          <td><input type="number" class="form-input table-input input-price" data-cat="${cat.key}" data-idx="${idx}" value="${priceCopper}"></td>
-          <td><input type="number" class="form-input table-input input-cost" data-cat="${cat.key}" data-idx="${idx}" value="${costCopper}"></td>
-          <td><input type="number" class="form-input table-input input-sold" data-cat="${cat.key}" data-idx="${idx}" value="${sold}"></td>
-          <td>${grossGold.toLocaleString()} G</td>
-          <td>${costGold.toLocaleString()} G</td>
-          <td class="positive-profit">${netGold.toLocaleString()} G</td>
-        `;
-        tbody.appendChild(tr);
+    if (el.mobileNavToggle) {
+      el.mobileNavToggle.addEventListener('click', () => {
+        el.sidebar.classList.toggle('open');
+        el.sidebarBackdrop.classList.toggle('show');
       });
     }
-  });
 
-  // Attach live change listeners for inputs
-  document.querySelectorAll('.table-input').forEach(input => {
-    input.addEventListener('input', (e) => {
-      const cat = e.target.getAttribute('data-cat');
-      const idx = parseInt(e.target.getAttribute('data-idx'), 10);
-      const row = e.target.closest('tr');
+    if (el.sidebarBackdrop) {
+      el.sidebarBackdrop.addEventListener('click', () => {
+        el.sidebar.classList.remove('open');
+        el.sidebarBackdrop.classList.remove('show');
+      });
+    }
 
-      const price = parseFloat(row.querySelector('.input-price').value) || 0;
-      const cost = parseFloat(row.querySelector('.input-cost').value) || 0;
-      const sold = parseFloat(row.querySelector('.input-sold').value) || 0;
+    // Save Store
+    el.btnSaveStore.addEventListener('click', saveLorebookStore);
 
-      const gross = Math.round((price * sold / 10000) * 100) / 100;
-      const totalCost = Math.round((cost * sold / 10000) * 100) / 100;
-      const net = Math.round((gross - totalCost) * 100) / 100;
+    // Export & Import
+    el.btnExportDb.addEventListener('click', () => {
+      window.location.href = '/v1/lorebooks/export';
+    });
 
-      row.cells[5].textContent = `${gross.toLocaleString()} G`;
-      row.cells[6].textContent = `${totalCost.toLocaleString()} G`;
-      row.cells[7].textContent = `${net.toLocaleString()} G`;
+    el.btnImportDb.addEventListener('click', () => {
+      el.modalTitle.textContent = 'Import JSON Database';
+      el.jsonModalArea.value = JSON.stringify(state.lorebookStore, null, 2);
+      el.jsonModal.classList.remove('hidden');
+    });
 
-      // Update stateData model locally
-      if (stateData.catalog[cat] && stateData.catalog[cat][idx]) {
-        stateData.catalog[cat][idx].price_copper = price;
-        stateData.catalog[cat][idx].unit_cost_copper = cost;
-        stateData.catalog[cat][idx].daily_units_sold = sold;
+    el.btnCloseModal.addEventListener('click', () => el.jsonModal.classList.add('hidden'));
+
+    el.btnSubmitModalJson.addEventListener('click', async () => {
+      try {
+        const json = JSON.parse(el.jsonModalArea.value);
+        if (!json || !Array.isArray(json.lorebooks)) {
+          throw new Error('JSON payload must contain a "lorebooks" array.');
+        }
+        state.lorebookStore = json;
+        await saveLorebookStore();
+        renderHierarchyTree();
+        el.jsonModal.classList.add('hidden');
+        log('Database imported successfully!', 'success');
+      } catch (err) {
+        alert(`Invalid JSON format: ${err.message}`);
       }
     });
-  });
-}
 
-// Save Catalog Data to Upstash Redis
-async function saveCatalogData() {
-  if (!stateData || !stateData.catalog) return;
-
-  try {
-    logConsole('info', 'Saving updated Product Catalog to Upstash Redis...');
-    const res = await fetch('/v1/worldstate/save_domain', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ domain: 'catalog', data: stateData.catalog })
+    // Add Lorebook
+    el.btnAddLorebook.addEventListener('click', () => {
+      const newLb = {
+        id: generateId('lb'),
+        name: 'New Lorebook',
+        description: 'Lorebook collection description...',
+        status: 'Active',
+        settings: {
+          day_trigger_patterns: ['\\[\\s*🕒?\\s*Day\\s+(\\d+)', '\\[Day\\s+(\\d+)'],
+          depth_scan: 2,
+          insertion_mode: 'context'
+        },
+        lores: []
+      };
+      state.lorebookStore.lorebooks.push(newLb);
+      selectLorebook(newLb.id);
     });
 
-    if (res.status === 403) {
-      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
-      updateAuthStatusUI(false);
-      throw new Error('HTTP 403 Forbidden');
-    }
+    // Apply Lorebook Settings
+    el.btnSaveLbSettings.addEventListener('click', () => {
+      const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
+      if (!lb) return;
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      lb.name = el.lbNameInput.value.trim() || 'Untitled Lorebook';
+      lb.status = el.lbStatusSelect.value;
+      lb.description = el.lbDescInput.value.trim();
+      lb.settings = {
+        insertion_mode: el.lbInsertionSelect.value,
+        depth_scan: parseInt(el.lbDepthInput.value, 10) || 2,
+        day_trigger_patterns: el.lbPatternsInput.value.split('\n').map(p => p.trim()).filter(Boolean)
+      };
 
-    logConsole('success', 'Catalog updated! YuriStore daily surplus recalculated automatically.');
-    await loadWorldState();
-  } catch (err) {
-    logConsole('error', `Failed to save catalog: ${err.message}`);
-  }
-}
-
-// Execute Manual State Mutation
-async function executeManualMutation() {
-  const action = document.getElementById('mutationAction').value;
-  const path = document.getElementById('mutationPath').value;
-  const op = document.getElementById('mutationOp').value;
-  const rawVal = document.getElementById('mutationValue').value;
-
-  if (!path) {
-    alert('Please enter a target path or domain!');
-    return;
-  }
-
-  let value = rawVal;
-  try {
-    value = JSON.parse(rawVal);
-  } catch (e) {
-    if (!isNaN(rawVal) && rawVal.trim() !== '') {
-      value = parseFloat(rawVal);
-    }
-  }
-
-  const mutation = { action, path, op, value };
-
-  try {
-    logConsole('warn', `Executing Manual Mutation: ${JSON.stringify(mutation)}...`);
-
-    const res = await fetch('/v1/worldstate/mutate', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ mutations: [mutation] })
+      log(`Updated Lorebook settings: ${lb.name}`, 'success');
+      renderHierarchyTree();
     });
 
-    if (res.status === 403) {
-      showAuthModal('Phiên làm việc hết hạn. Vui lòng đăng nhập lại.');
-      updateAuthStatusUI(false);
-      throw new Error('HTTP 403 Forbidden');
+    // Add Lore under Lorebook
+    el.btnAddLoreUnderLb.addEventListener('click', () => {
+      const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
+      if (!lb) return;
+
+      const newLore = {
+        id: generateId('lore'),
+        name: 'New Lore Entry',
+        group: 'General',
+        is_group_head: false,
+        trigger: {
+          keywords: ['new lore'],
+          trigger_rate: 100
+        },
+        prompt_area: {
+          definition: 'Enter definition here...',
+          catalog: [],
+          staff: {},
+          policy: {},
+          custom_data: {}
+        }
+      };
+
+      lb.lores.push(newLore);
+      selectLoreEntry(lb.id, newLore.id);
+    });
+
+    // Delete Lorebook
+    el.btnDeleteLorebook.addEventListener('click', () => {
+      if (!confirm('Are you sure you want to delete this entire Lorebook?')) return;
+      state.lorebookStore.lorebooks = state.lorebookStore.lorebooks.filter(b => b.id !== state.selectedLbId);
+      state.selectedLbId = null;
+      state.selectedLoreId = null;
+      renderHierarchyTree();
+      el.lorebookEditorView.classList.add('hidden');
+      el.emptyEditorView.classList.remove('hidden');
+      log('Deleted Lorebook.', 'info');
+    });
+
+    // Sub-Tabs in Lore Entry Editor
+    el.subTabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        el.subTabs.forEach(b => b.classList.remove('active'));
+        el.subTabContents.forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`subtab-${btn.dataset.subtab}`).classList.add('active');
+      });
+    });
+
+    // Dynamic Row Buttons for Catalog & Key-Value
+    el.btnAddCatalogItem.addEventListener('click', () => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="form-input form-input-sm cat-name" placeholder="Item Name"></td>
+        <td>
+          <select class="form-select form-select-sm cat-type">
+            <option value="retail">Retail Item</option>
+            <option value="ticket">Ticket</option>
+            <option value="food">Food / Beverage</option>
+            <option value="fee_revenue_share">Fee / Revenue Share</option>
+          </select>
+        </td>
+        <td><input type="number" class="form-input form-input-sm cat-price" value="1000"></td>
+        <td><input type="number" class="form-input form-input-sm cat-cost" value="200"></td>
+        <td><input type="number" class="form-input form-input-sm cat-sold" value="50"></td>
+        <td><input type="text" class="form-input form-input-sm cat-val" placeholder="e.g. -50%"></td>
+        <td>
+          <button class="btn-icon btn-icon-danger btn-delete-cat"><i data-lucide="trash"></i></button>
+        </td>
+      `;
+      tr.querySelector('.btn-delete-cat').addEventListener('click', () => {
+        tr.remove();
+        updateCatalogPreview(getCatalogFromForm());
+      });
+      el.catalogTableBody.appendChild(tr);
+      if (window.lucide) window.lucide.createIcons();
+    });
+
+    el.btnAddStaffRow.addEventListener('click', () => addKvRow(el.staffKvContainer));
+    el.btnAddPolicyRow.addEventListener('click', () => addKvRow(el.policyKvContainer));
+    el.btnAddCustomRow.addEventListener('click', () => addKvRow(el.customKvContainer));
+
+    // Save Lore Entry
+    el.btnSaveLoreEntry.addEventListener('click', () => {
+      const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
+      if (!lb) return;
+      const lore = (lb.lores || []).find(l => l.id === state.selectedLoreId);
+      if (!lore) return;
+
+      lore.name = el.loreNameInput.value.trim() || 'Untitled Lore';
+      lore.group = el.loreGroupInput.value.trim() || 'General';
+      lore.is_group_head = el.loreGroupHeadCheckbox.checked;
+
+      // Ensure only one group head per group if designated
+      if (lore.is_group_head) {
+        lb.lores.forEach(l => {
+          if (l.group === lore.group && l.id !== lore.id) {
+            l.is_group_head = false;
+          }
+        });
+      }
+
+      const keywords = el.loreKeywordsInput.value.split(',').map(k => k.trim()).filter(Boolean);
+      const trigger_rate = parseInt(el.loreRateInput.value, 10) || 100;
+
+      lore.trigger = { keywords, trigger_rate };
+      lore.prompt_area = {
+        definition: el.loreDefInput.value.trim(),
+        catalog: getCatalogFromForm(),
+        staff: getDictFromKvContainer(el.staffKvContainer),
+        policy: getDictFromKvContainer(el.policyKvContainer),
+        custom_data: getDictFromKvContainer(el.customKvContainer)
+      };
+
+      log(`Saved Lore Entry: ${lore.name}`, 'success');
+      renderHierarchyTree();
+    });
+
+    // Delete Lore Entry
+    el.btnDeleteLoreEntry.addEventListener('click', () => {
+      if (!confirm('Are you sure you want to delete this Lore entry?')) return;
+      const lb = state.lorebookStore.lorebooks.find(b => b.id === state.selectedLbId);
+      if (!lb) return;
+      lb.lores = lb.lores.filter(l => l.id !== state.selectedLoreId);
+      state.selectedLoreId = null;
+      selectLorebook(lb.id);
+      log('Deleted Lore entry.', 'info');
+    });
+
+    // Simulator Runner
+    el.btnRunSimulation.addEventListener('click', async () => {
+      try {
+        const text = el.simSampleText.value.trim();
+        log('Running context simulation dry-run...', 'info');
+
+        const res = await fetch('/v1/lorebooks/compile', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({
+            store: state.lorebookStore,
+            sampleText: text
+          })
+        });
+
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const data = await res.json();
+
+        el.simCompiledOutput.textContent = data.compiled_prompt || '(Empty prompt returned)';
+        el.simOutDay.textContent = `Extracted Day: ${data.current_day !== null ? `Day ${data.current_day}` : 'None'}`;
+        el.simOutCount.textContent = `Active Lores: ${data.active_count}`;
+        el.simOutTarget.textContent = `Target: ${data.insertion_mode === 'user_msg' ? 'User Message' : 'System Context'}`;
+
+        log(`Simulation finished. Active Lores: ${data.active_count}`, 'success');
+      } catch (err) {
+        log(`Simulation error: ${err.message}`, 'error');
+      }
+    });
+
+    el.btnCopyCompiledPrompt.addEventListener('click', () => {
+      navigator.clipboard.writeText(el.simCompiledOutput.textContent);
+      log('Copied compiled prompt to clipboard!', 'info');
+    });
+
+    // Auth Key Handling
+    if (el.inputAuthKey) el.inputAuthKey.value = state.authKey;
+
+    if (el.btnToggleAuthVisibility) {
+      el.btnToggleAuthVisibility.addEventListener('click', () => {
+        const type = el.inputAuthKey.type === 'password' ? 'text' : 'password';
+        el.inputAuthKey.type = type;
+      });
     }
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    logConsole('success', 'Mutation executed and applied to Upstash Redis!');
-    await loadWorldState();
-  } catch (err) {
-    logConsole('error', `Mutation failed: ${err.message}`);
+    if (el.btnSaveAuthKey) {
+      el.btnSaveAuthKey.addEventListener('click', () => {
+        state.authKey = el.inputAuthKey.value.trim();
+        localStorage.setItem('CLIENT_AUTH_KEY', state.authKey);
+        log('CLIENT_AUTH_KEY updated in LocalStorage.', 'success');
+      });
+    }
   }
-}
 
-// Utility: Log Console Output
-function logConsole(type, msg) {
-  const consoleEl = document.getElementById('logConsole');
-  if (!consoleEl) return;
+  // --- INITIALIZATION ---
+  function init() {
+    bindEvents();
+    loadLorebookStore();
+  }
 
-  const timeStr = new Date().toLocaleTimeString();
-  const entry = document.createElement('div');
-  entry.className = `log-entry ${type}`;
-  entry.textContent = `[${timeStr}] ${msg}`;
-
-  consoleEl.appendChild(entry);
-  consoleEl.scrollTop = consoleEl.scrollHeight;
-}
+  document.addEventListener('DOMContentLoaded', init);
+})();

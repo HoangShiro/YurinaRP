@@ -11,7 +11,8 @@ const { timingSafeEqual } = require('crypto');
 
 const { processEventTriggers } = require('./scripts/eventTriggers');
 const { applyAutoLineBreak, fixTextFormatting, StreamTextProcessor } = require('./scripts/formatFixer');
-const { fetchRemoteLorebook, saveRemoteLorebook } = require('./scripts/upstashLorebook');
+const { fetchRemoteLorebookStore, saveRemoteLorebookStore, fetchRemoteLorebook, saveRemoteLorebook } = require('./scripts/upstashLorebook');
+const { compileLorebookStore, extractCurrentDay } = require('./scripts/lorebookCompiler');
 const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/worldStateEngine');
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
@@ -405,10 +406,81 @@ app.get('/v1/models', (req, res) => {
   });
 });
 
+// ─── Lorebooks Tiered Database Routes ────────────────────────────────────────
+
+app.get('/v1/lorebooks', async (req, res) => {
+  try {
+    const store = await fetchRemoteLorebookStore();
+    res.json({ status: 'ok', store });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'lorebooks_fetch_error' } });
+  }
+});
+
+app.post('/v1/lorebooks', async (req, res) => {
+  try {
+    const storeData = req.body?.store || req.body;
+    if (!storeData || !Array.isArray(storeData.lorebooks)) {
+      return res.status(400).json({ error: { message: 'Invalid store format. Body must contain a "lorebooks" array.', type: 'invalid_request_error' } });
+    }
+    const result = await saveRemoteLorebookStore(storeData);
+    res.json({ status: 'ok', message: 'LorebookStore saved successfully to Upstash Redis', result });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'lorebooks_save_error' } });
+  }
+});
+
+app.post('/v1/lorebooks/compile', async (req, res) => {
+  try {
+    const { store: reqStore, messages: reqMessages, sampleText } = req.body;
+    const store = reqStore || await fetchRemoteLorebookStore();
+    const messages = Array.isArray(reqMessages)
+      ? reqMessages
+      : [{ role: 'user', content: sampleText || '[ 🕒 Day 242] Testing Lorebook Compile' }];
+
+    const result = compileLorebookStore(store, messages);
+    const dayExtracted = extractCurrentDay(messages);
+    res.json({
+      status: 'ok',
+      current_day: dayExtracted,
+      insertion_mode: result.insertionMode,
+      active_count: result.activeCount,
+      compiled_prompt: result.compiledPrompt
+    });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'lorebooks_compile_error' } });
+  }
+});
+
+app.get('/v1/lorebooks/export', async (req, res) => {
+  try {
+    const store = await fetchRemoteLorebookStore();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="lorebook_store.json"');
+    res.send(JSON.stringify(store, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'lorebooks_export_error' } });
+  }
+});
+
+app.post('/v1/lorebooks/import', async (req, res) => {
+  try {
+    const storeData = req.body;
+    if (!storeData || !Array.isArray(storeData.lorebooks)) {
+      return res.status(400).json({ error: { message: 'Import payload must be a valid JSON with a "lorebooks" array.' } });
+    }
+    await saveRemoteLorebookStore(storeData);
+    res.json({ status: 'ok', message: 'Lorebook database imported and saved successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'lorebooks_import_error' } });
+  }
+});
+
+// Legacy backward compatibility route
 app.get('/v1/lorebook', async (req, res) => {
   try {
-    const lorebook = await fetchRemoteLorebook();
-    res.json({ status: 'ok', lorebook });
+    const store = await fetchRemoteLorebookStore();
+    res.json({ status: 'ok', store });
   } catch (err) {
     res.status(500).json({ error: { message: err.message, type: 'lorebook_fetch_error' } });
   }
@@ -416,10 +488,12 @@ app.get('/v1/lorebook', async (req, res) => {
 
 app.post('/v1/lorebook', async (req, res) => {
   try {
-    const content = req.body?.lorebook || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
-    if (!content) {
-      return res.status(400).json({ error: { message: 'Missing lorebook content in request body', type: 'invalid_request_error' } });
+    const storeData = req.body?.store || req.body;
+    if (storeData && Array.isArray(storeData.lorebooks)) {
+      await saveRemoteLorebookStore(storeData);
+      return res.json({ status: 'ok', message: 'LorebookStore saved to Upstash' });
     }
+    const content = req.body?.lorebook || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
     const result = await saveRemoteLorebook(content);
     res.json({ status: 'ok', message: 'Lorebook saved to Upstash', result });
   } catch (err) {
@@ -527,9 +601,15 @@ app.post('/v1/chat/completions', async (req, res) => {
     const worldState = await processWorldStateTick(messages);
     const worldSnapshot = compileWorldStateSnapshot(worldState);
 
-    // 2. Fetch remote lorebook from Upstash Redis if configured
-    const remoteLorebookHtml = await fetchRemoteLorebook();
-    const combinedContext = [worldSnapshot, remoteLorebookHtml].filter(Boolean).join('\n\n');
+    // 2. Fetch Tiered LorebookStore and compile dynamic context
+    const lorebookStore = await fetchRemoteLorebookStore();
+    const compiledLore = compileLorebookStore(lorebookStore, messages);
+
+    const contextParts = [worldSnapshot];
+    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+      contextParts.push(compiledLore.compiledPrompt);
+    }
+    const combinedContext = contextParts.filter(Boolean).join('\n\n');
 
     if (combinedContext && Array.isArray(messages) && messages.length > 0) {
       if (messages[0].role === 'system') {
@@ -538,6 +618,17 @@ app.post('/v1/chat/completions', async (req, res) => {
         }
       } else {
         messages.unshift({ role: 'system', content: combinedContext });
+      }
+    }
+
+    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          if (typeof messages[i].content === 'string') {
+            messages[i].content += '\n\n' + compiledLore.compiledPrompt;
+          }
+          break;
+        }
       }
     }
 
