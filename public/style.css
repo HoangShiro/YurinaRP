@@ -263,13 +263,42 @@ body.dark-theme {
 
 .flex-1 { flex: 1; }
 
-/* Tree Navigation */
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Tree Navigation Sidebar */
+.tree-card {
+  position: sticky;
+  top: 90px;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+}
+
 .tree-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 70vh;
+  gap: 12px;
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
+  padding-right: 6px;
 }
 
 .tree-lb-node {
@@ -277,6 +306,7 @@ body.dark-theme {
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
   overflow: hidden;
+  transition: all 0.2s ease;
 }
 
 .tree-lb-node.active {
@@ -310,6 +340,23 @@ body.dark-theme {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tree-lores-group.collapsed {
+  display: none;
+}
+
+.lb-chevron {
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+}
+
+.lb-header-row.collapsed .lb-chevron {
+  transform: rotate(-90deg);
 }
 
 .tree-grp-header {

@@ -1,5 +1,27 @@
-{
-  "lorebooks": [
+// buildAndPushHistoryStore.js — Rebuilds and pushes the complete YuriStore history.md Lorebook database to Upstash Redis
+const fs = require('fs');
+const path = require('path');
+
+// Load .env variables
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  const envText = fs.readFileSync(envPath, 'utf8');
+  envText.split('\n').forEach(line => {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (match) {
+      const key = match[1];
+      let value = match[2] || '';
+      if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+      if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+      process.env[key] = value.trim();
+    }
+  });
+}
+
+const { saveRemoteLorebookStore } = require('./upstashLorebook');
+
+const fullStore = {
+  lorebooks: [
     {
       "id": "lb_yuri_hq_ecosystem",
       "name": "Yuri HQ Ecosystem",
@@ -14,19 +36,14 @@
         "insertion_mode": "context"
       },
       "lores": [
+        // GROUP: YuriHQ
         {
           "id": "lore_yuri_hq_main",
           "name": "Yuri HQ Governance & Executive Headquarters",
           "group": "YuriHQ",
           "is_group_head": true,
           "trigger": {
-            "keywords": [
-              "yuri hq",
-              "yurihq",
-              "headquarters",
-              "executive board",
-              "holo orb command"
-            ],
+            "keywords": ["yuri hq", "yurihq", "headquarters", "executive board", "holo orb command"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -57,15 +74,7 @@
           "group": "YuriHQ",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuristore",
-              "yuri store",
-              "bento",
-              "teppanyaki",
-              "curry",
-              "ramen",
-              "mre"
-            ],
+            "keywords": ["yuristore", "yuri store", "bento", "teppanyaki", "curry", "ramen", "mre"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -165,13 +174,7 @@
           "group": "YuriHQ",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "complex production",
-              "yuri complex",
-              "factory",
-              "assembly",
-              "aircraft plant"
-            ],
+            "keywords": ["complex production", "yuri complex", "factory", "assembly", "aircraft plant"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -198,12 +201,7 @@
           "group": "YuriHQ",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuricosmetics",
-              "cosmetics",
-              "perfume",
-              "beauty"
-            ],
+            "keywords": ["yuricosmetics", "cosmetics", "perfume", "beauty"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -237,19 +235,15 @@
             }
           }
         },
+
+        // GROUP: YuriLogistics
         {
           "id": "lore_yuritrain_main",
           "name": "YuriTrain Transcontinental Railway",
           "group": "YuriLogistics",
           "is_group_head": true,
           "trigger": {
-            "keywords": [
-              "yuritrain",
-              "yuri train",
-              "railway",
-              "train",
-              "freight"
-            ],
+            "keywords": ["yuritrain", "yuri train", "railway", "train", "freight"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -296,13 +290,7 @@
           "group": "YuriLogistics",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuristation",
-              "yuri station",
-              "bus",
-              "truck",
-              "transit hub"
-            ],
+            "keywords": ["yuristation", "yuri station", "bus", "truck", "transit hub"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -349,13 +337,7 @@
           "group": "YuriLogistics",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuriship",
-              "yuri ship",
-              "hydro-skimmer",
-              "shipyard",
-              "cargo ship"
-            ],
+            "keywords": ["yuriship", "yuri ship", "hydro-skimmer", "shipyard", "cargo ship"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -380,13 +362,7 @@
           "group": "YuriLogistics",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuriaerial",
-              "yuri aerial",
-              "aircraft",
-              "flight",
-              "levium engine"
-            ],
+            "keywords": ["yuriaerial", "yuri aerial", "aircraft", "flight", "levium engine"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -406,20 +382,15 @@
             }
           }
         },
+
+        // GROUP: YuriFinancials
         {
           "id": "lore_yuribank_main",
           "name": "YuriBank Financial, Identity & Ley Line Infrastructure",
           "group": "YuriFinancials",
           "is_group_head": true,
           "trigger": {
-            "keywords": [
-              "yuribank",
-              "yuri bank",
-              "card",
-              "ley line",
-              "atm",
-              "transfer"
-            ],
+            "keywords": ["yuribank", "yuri bank", "card", "ley line", "atm", "transfer"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -471,12 +442,7 @@
           "group": "YuriFinancials",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "holo orb",
-              "hologram",
-              "public advertising",
-              "video call"
-            ],
+            "keywords": ["holo orb", "hologram", "public advertising", "video call"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -498,12 +464,7 @@
           "group": "YuriFinancials",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuriconstruct",
-              "wand leasing",
-              "builder wand",
-              "forging wand"
-            ],
+            "keywords": ["yuriconstruct", "wand leasing", "builder wand", "forging wand"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -550,12 +511,7 @@
           "group": "YuriFinancials",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "levium",
-              "yurium",
-              "superalloy",
-              "tunnel boring machine"
-            ],
+            "keywords": ["levium", "yurium", "superalloy", "tunnel boring machine"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -575,19 +531,15 @@
             }
           }
         },
+
+        // GROUP: YuriWelfare
         {
           "id": "lore_yuricharity_main",
           "name": "YuriCharity Continental Relief & Mobile Flying Fleet",
           "group": "YuriWelfare",
           "is_group_head": true,
           "trigger": {
-            "keywords": [
-              "yuricharity",
-              "yuri charity",
-              "relief",
-              "meals",
-              "flying charity"
-            ],
+            "keywords": ["yuricharity", "yuri charity", "relief", "meals", "flying charity"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -620,13 +572,7 @@
           "group": "YuriWelfare",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yurier",
-              "yuri ers",
-              "emergency",
-              "rescue",
-              "ambulance"
-            ],
+            "keywords": ["yurier", "yuri ers", "emergency", "rescue", "ambulance"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -650,13 +596,7 @@
           "group": "YuriWelfare",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yuriacademy",
-              "yuri academy",
-              "yurigenesis",
-              "azuriel",
-              "education"
-            ],
+            "keywords": ["yuriacademy", "yuri academy", "yurigenesis", "azuriel", "education"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -684,12 +624,7 @@
           "group": "YuriWelfare",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "yurihospital",
-              "yuri hospital",
-              "church healer",
-              "medical"
-            ],
+            "keywords": ["yurihospital", "yuri hospital", "church healer", "medical"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -722,19 +657,14 @@
         "insertion_mode": "context"
       },
       "lores": [
+        // GROUP: WorldEconomics
         {
           "id": "lore_stagaia_salaries",
           "name": "Stagaia Comparative Wage & Salary Baselines",
           "group": "WorldEconomics",
           "is_group_head": true,
           "trigger": {
-            "keywords": [
-              "salary",
-              "wage",
-              "pre-yuri era",
-              "post-yuri era",
-              "income"
-            ],
+            "keywords": ["salary", "wage", "pre-yuri era", "post-yuri era", "income"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -753,18 +683,15 @@
             }
           }
         },
+
+        // GROUP: Timeline
         {
           "id": "lore_timeline_era1",
           "name": "Historical Chronicle: Early Era & Store Launch (Day 1 - Day 80)",
           "group": "Timeline",
           "is_group_head": true,
           "trigger": {
-            "keywords": [
-              "history day 1",
-              "timeline era 1",
-              "grand opening",
-              "donation tournament"
-            ],
+            "keywords": ["history day 1", "timeline era 1", "grand opening", "donation tournament"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -787,11 +714,7 @@
           "group": "Timeline",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "timeline era 2",
-              "yuritrain launch",
-              "yuristation expansion"
-            ],
+            "keywords": ["timeline era 2", "yuritrain launch", "yuristation expansion"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -814,12 +737,7 @@
           "group": "Timeline",
           "is_group_head": false,
           "trigger": {
-            "keywords": [
-              "timeline era 3",
-              "yuriaerial maiden flight",
-              "yurium alloy",
-              "day 242"
-            ],
+            "keywords": ["timeline era 3", "yuriaerial maiden flight", "yurium alloy", "day 242"],
             "trigger_rate": 100
           },
           "prompt_area": {
@@ -839,4 +757,22 @@
       ]
     }
   ]
+};
+
+async function run() {
+  try {
+    console.log('[BUILD-PUSH] Writing full history dataset to seed_lorebooks.json...');
+    const seedPath = path.join(__dirname, '..', 'seed_lorebooks.json');
+    fs.writeFileSync(seedPath, JSON.stringify(fullStore, null, 2), 'utf8');
+    console.log('[BUILD-PUSH] seed_lorebooks.json updated successfully.');
+
+    console.log('[BUILD-PUSH] Pushing dataset directly to Upstash Redis under key "lorebook_store"...');
+    const result = await saveRemoteLorebookStore(fullStore);
+    console.log('[BUILD-PUSH] SUCCESS! Pushed database directly to Upstash Redis:', result);
+  } catch (err) {
+    console.error('[BUILD-PUSH] FATAL ERROR:', err.message);
+    process.exit(1);
+  }
 }
+
+run();

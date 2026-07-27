@@ -244,6 +244,7 @@
       lbNode.innerHTML = `
         <div class="lb-header-row" data-lbid="${lb.id}">
           <div class="lb-title-group">
+            <i data-lucide="chevron-down" class="lb-chevron"></i>
             <i data-lucide="book"></i>
             <span class="lb-name">${lb.name || 'Untitled Lorebook'}</span>
           </div>
@@ -293,7 +294,14 @@
         });
       });
 
-      lbNode.querySelector('.lb-header-row').addEventListener('click', () => {
+      const headerRow = lbNode.querySelector('.lb-header-row');
+      headerRow.addEventListener('click', (e) => {
+        if (e.target.classList.contains('lb-chevron') || e.target.closest('.lb-chevron')) {
+          e.stopPropagation();
+          headerRow.classList.toggle('collapsed');
+          loresContainer.classList.toggle('collapsed');
+          return;
+        }
         selectLorebook(lb.id);
       });
 
