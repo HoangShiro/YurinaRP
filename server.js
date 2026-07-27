@@ -447,16 +447,8 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
       messages.push({ role: 'user', content: sampleText || '[ 🕒 Day 242] Testing Context Compile' });
     }
 
-    // 1. Prepend Base System Prompt
-    if (systemPromptStore && systemPromptStore.system_prompt) {
-      if (messages[0]?.role === 'system') {
-        if (!messages[0].content.includes(systemPromptStore.system_prompt)) {
-          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
-        }
-      } else {
-        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
-      }
-    }
+    // 1. Evaluate Base System Prompt
+    const baseSystemPrompt = (systemPromptStore && systemPromptStore.system_prompt) ? systemPromptStore.system_prompt.trim() : '';
 
     // 2. Process World State Tick & Snapshot
     const worldState = await processWorldStateTick(messages);
@@ -464,29 +456,6 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
 
     // 3. Compile Lorebook Store
     const compiledLore = compileLorebookStore(store, messages);
-
-    const contextParts = [worldSnapshot];
-    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
-      contextParts.push(compiledLore.compiledPrompt);
-    }
-    const combinedContext = contextParts.filter(Boolean).join('\n\n');
-
-    if (combinedContext && Array.isArray(messages) && messages.length > 0) {
-      if (messages[0].role === 'system') {
-        messages[0].content += '\n\n' + combinedContext;
-      } else {
-        messages.unshift({ role: 'system', content: combinedContext });
-      }
-    }
-
-    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          messages[i].content += '\n\n' + compiledLore.compiledPrompt;
-          break;
-        }
-      }
-    }
 
     // 4. Evaluate System Prompt Rules & Event Triggers
     const {
@@ -498,10 +467,45 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
 
     const dayExtracted = extractCurrentDay(eventProcessedMessages);
 
-    // Format full prompt output with role headers
-    const fullPromptOutput = eventProcessedMessages
-      .map(m => `=== [ROLE: ${m.role.toUpperCase()}] ===\n${m.content}`)
-      .join('\n\n');
+    // Separate System Context parts and User Message injected parts
+    const systemContextSections = [];
+
+    if (baseSystemPrompt) {
+      systemContextSections.push(`--- [1] Base System Prompt ---\n${baseSystemPrompt}`);
+    }
+
+    if (worldSnapshot) {
+      systemContextSections.push(`--- [2] World State Snapshot ---\n${worldSnapshot}`);
+    }
+
+    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+      systemContextSections.push(`--- [3] Lorebook Database Context ---\n${compiledLore.compiledPrompt}`);
+    } else {
+      systemContextSections.push(`--- [3] Lorebook Database Context ---\n(Lorebooks disabled or no matching keywords found)`);
+    }
+
+    // Find system context rules vs user message rules in triggeredPrompts
+    const userMsgInjectedParts = [];
+    if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
+      userMsgInjectedParts.push(`[Lorebook User Prompt]:\n${compiledLore.compiledPrompt}`);
+    }
+
+    if (triggeredPrompts && triggeredPrompts.length > 0) {
+      userMsgInjectedParts.push(`[Triggered Prompt Rules]:\n${triggeredPrompts.join('\n\n')}`);
+    }
+
+    const outputLines = [];
+    outputLines.push('=== ⚙️ COMPILED SYSTEM CONTEXT ===');
+    outputLines.push(systemContextSections.join('\n\n'));
+
+    outputLines.push('\n=== 📩 INJECTED USER MESSAGE PROMPTS ===');
+    if (userMsgInjectedParts.length > 0) {
+      outputLines.push(userMsgInjectedParts.join('\n\n'));
+    } else {
+      outputLines.push('(None)');
+    }
+
+    const fullPromptOutput = outputLines.join('\n\n');
 
     res.json({
       status: 'ok',
