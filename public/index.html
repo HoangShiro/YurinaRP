@@ -15,9 +15,8 @@
 <body class="dark-theme">
 
   <div class="app-layout">
-    <!-- Discord App-style Sidebar Navigation -->
+    <!-- Discord App-style Sidebar Navigation (Compact 72px Server Rail) -->
     <aside class="sidebar discord-sidebar">
-      <!-- Discord Rail (Far Left Vertical Server/Tab Bar) -->
       <div class="discord-rail">
         <div class="rail-item rail-brand active" data-tooltip="Yuri Systems Control Center" data-tab="lorebooks">
           <div class="rail-pill"></div>
@@ -55,54 +54,12 @@
             <i data-lucide="settings"></i>
           </div>
         </div>
-      </div>
 
-      <!-- Discord Channel/Panel Sidebar -->
-      <div class="sidebar-panel">
-        <div class="panel-header">
-          <div class="header-title-box">
-            <h2>Yuri Systems</h2>
-            <span class="header-subtitle">Lorebook & World Control</span>
-          </div>
-          <i data-lucide="chevron-down" class="panel-chevron"></i>
-        </div>
+        <div class="rail-spacer"></div>
 
-        <nav class="panel-nav nav-menu">
-          <div class="panel-section-title">CHANNELS & WORKSPACES</div>
-          <button class="nav-item panel-channel-item active" data-tab="lorebooks">
-            <i data-lucide="hash"></i>
-            <span>lorebook-database</span>
-          </button>
-          <button class="nav-item panel-channel-item" data-tab="simulator">
-            <i data-lucide="terminal"></i>
-            <span>context-simulator</span>
-          </button>
-          <button class="nav-item panel-channel-item" data-tab="worldstate">
-            <i data-lucide="coins"></i>
-            <span>world-economic-state</span>
-          </button>
-          <button class="nav-item panel-channel-item" data-tab="settings">
+        <div class="rail-item" id="btnQuickAuth" data-tooltip="Auth Key Settings">
+          <div class="rail-icon rail-icon-subtle">
             <i data-lucide="shield-check"></i>
-            <span>auth-audit-logs</span>
-          </button>
-        </nav>
-
-        <!-- Discord User/System Footer Bar -->
-        <div class="discord-user-bar">
-          <div class="user-avatar-wrapper">
-            <div class="user-avatar">
-              <i data-lucide="bot"></i>
-            </div>
-            <span class="user-status-dot online"></span>
-          </div>
-          <div class="user-info">
-            <div class="user-name">Yuri Core Engine</div>
-            <div class="user-subtext">Upstash Redis Online</div>
-          </div>
-          <div class="user-actions">
-            <button class="user-action-btn" id="btnQuickAuth" title="Auth Settings">
-              <i data-lucide="lock"></i>
-            </button>
           </div>
         </div>
       </div>
