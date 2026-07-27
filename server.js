@@ -5,6 +5,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 const { StringDecoder } = require('string_decoder');
 const { timingSafeEqual } = require('crypto');
 
@@ -97,7 +98,11 @@ const FALLBACK_MODELS = [
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 app.use((req, res, next) => {
   if (
@@ -861,4 +866,6 @@ app.listen(PORT, () => {
     console.error('[VALIDATION] Startup check failed:', err.message);
   });
 });
-  
+
+module.exports = app;
+
