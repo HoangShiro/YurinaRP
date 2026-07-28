@@ -997,6 +997,11 @@
       const displayCost = item.cost_raw || (typeof item.unit_cost_copper === 'number' ? formatCopperForInput(item.unit_cost_copper) : '0');
       const startDate = typeof item.start_date === 'number' ? item.start_date : (parseInt(item.start_date, 10) || 1);
 
+      const capMetricId = item.capacity_binding?.metric_id || '';
+      const capUnits = item.capacity_binding?.units_per_metric || '';
+      const demandMetricId = item.demand_binding?.metric_id || '';
+      const demandBoost = item.demand_binding?.boost_per_1k_units || '';
+
       tr.innerHTML = `
         <td><input type="text" class="form-input form-input-sm cat-name" value="${item.name || ''}" placeholder="Item Name"></td>
         <td>
@@ -1012,6 +1017,20 @@
         <td><input type="number" class="form-input form-input-sm cat-sold" value="${item.daily_units_sold || 0}"></td>
         <td><input type="number" min="1" class="form-input form-input-sm cat-start-date" value="${startDate}" placeholder="Day 1"></td>
         <td><input type="text" class="form-input form-input-sm cat-val" value="${item.value || ''}" placeholder="e.g. -50% or -5S"></td>
+        <td>
+          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 170px;">
+            <div style="display: flex; gap: 4px; align-items: center;" title="Capacity Cap Binding: Limits sales based on infrastructure metric">
+              <span style="font-size: 0.72rem; color: #a78bfa; width: 34px; font-weight: 600;">Cap:</span>
+              <input type="text" class="form-input form-input-xs cat-cap-metric" value="${capMetricId}" placeholder="Metric ID" style="font-size: 0.75rem;">
+              <input type="number" step="any" class="form-input form-input-xs cat-cap-units" value="${capUnits}" placeholder="Ratio" style="width: 50px; font-size: 0.75rem;">
+            </div>
+            <div style="display: flex; gap: 4px; align-items: center;" title="Demand Boost Binding: Increases sales demand based on market coverage metric">
+              <span style="font-size: 0.72rem; color: #34d399; width: 34px; font-weight: 600;">Boost:</span>
+              <input type="text" class="form-input form-input-xs cat-demand-metric" value="${demandMetricId}" placeholder="Metric ID" style="font-size: 0.75rem;">
+              <input type="number" step="any" class="form-input form-input-xs cat-demand-boost" value="${demandBoost}" placeholder="Ratio" style="width: 50px; font-size: 0.75rem;">
+            </div>
+          </div>
+        </td>
         <td>
           <button class="btn-icon btn-icon-danger btn-delete-cat" data-index="${index}" title="Remove Item">
             <i data-lucide="trash"></i>
@@ -1039,8 +1058,16 @@
       const start_date_val = tr.querySelector('.cat-start-date') ? (parseInt(tr.querySelector('.cat-start-date').value, 10) || 1) : 1;
       const value = tr.querySelector('.cat-val').value.trim();
 
+      const capMetricId = tr.querySelector('.cat-cap-metric')?.value.trim();
+      const capUnits = parseFloat(tr.querySelector('.cat-cap-units')?.value);
+      const demandMetricId = tr.querySelector('.cat-demand-metric')?.value.trim();
+      const demandBoost = parseFloat(tr.querySelector('.cat-demand-boost')?.value);
+
+      const capacity_binding = capMetricId ? { metric_id: capMetricId, units_per_metric: capUnits || 1 } : undefined;
+      const demand_binding = demandMetricId ? { metric_id: demandMetricId, boost_per_1k_units: demandBoost || 0.05 } : undefined;
+
       if (name) {
-        catalog.push({
+        const itemObj = {
           id: generateId('item'),
           name,
           type,
@@ -1055,7 +1082,12 @@
           branches: 1,
           value,
           description: type === 'fee_revenue_share' ? 'Dynamic fee/revenue sharing formula' : ''
-        });
+        };
+
+        if (capacity_binding) itemObj.capacity_binding = capacity_binding;
+        if (demand_binding) itemObj.demand_binding = demand_binding;
+
+        catalog.push(itemObj);
       }
     });
     return catalog;
