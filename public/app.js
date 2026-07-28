@@ -1018,16 +1018,16 @@
         <td><input type="number" min="1" class="form-input form-input-sm cat-start-date" value="${startDate}" placeholder="Day 1"></td>
         <td><input type="text" class="form-input form-input-sm cat-val" value="${item.value || ''}" placeholder="e.g. -50% or -5S"></td>
         <td>
-          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 170px;">
-            <div style="display: flex; gap: 4px; align-items: center;" title="Capacity Cap Binding: Limits sales based on infrastructure metric">
-              <span style="font-size: 0.72rem; color: #a78bfa; width: 34px; font-weight: 600;">Cap:</span>
-              <input type="text" class="form-input form-input-xs cat-cap-metric" value="${capMetricId}" placeholder="Metric ID" style="font-size: 0.75rem;">
-              <input type="number" step="any" class="form-input form-input-xs cat-cap-units" value="${capUnits}" placeholder="Ratio" style="width: 50px; font-size: 0.75rem;">
+          <div style="display: flex; flex-direction: column; gap: 6px; min-width: 280px;">
+            <div style="display: flex; gap: 6px; align-items: center;" title="Capacity Cap Binding: Limits sales based on infrastructure metric">
+              <span style="font-size: 0.72rem; color: #a78bfa; width: 40px; font-weight: 600; flex-shrink: 0;">Cap:</span>
+              <input type="text" class="form-input form-input-xs cat-cap-metric" value="${capMetricId}" placeholder="Metric ID (e.g. metric_highways)" style="font-size: 0.75rem; flex: 1; min-width: 110px;">
+              <input type="number" step="any" class="form-input form-input-xs cat-cap-units" value="${capUnits}" placeholder="Ratio" style="width: 90px; font-size: 0.75rem; flex-shrink: 0;">
             </div>
-            <div style="display: flex; gap: 4px; align-items: center;" title="Demand Boost Binding: Increases sales demand based on market coverage metric">
-              <span style="font-size: 0.72rem; color: #34d399; width: 34px; font-weight: 600;">Boost:</span>
-              <input type="text" class="form-input form-input-xs cat-demand-metric" value="${demandMetricId}" placeholder="Metric ID" style="font-size: 0.75rem;">
-              <input type="number" step="any" class="form-input form-input-xs cat-demand-boost" value="${demandBoost}" placeholder="Ratio" style="width: 50px; font-size: 0.75rem;">
+            <div style="display: flex; gap: 6px; align-items: center;" title="Demand Boost Binding: Increases sales demand based on market coverage metric">
+              <span style="font-size: 0.72rem; color: #34d399; width: 40px; font-weight: 600; flex-shrink: 0;">Boost:</span>
+              <input type="text" class="form-input form-input-xs cat-demand-metric" value="${demandMetricId}" placeholder="Metric ID (e.g. metric_cardholders)" style="font-size: 0.75rem; flex: 1; min-width: 110px;">
+              <input type="number" step="any" class="form-input form-input-xs cat-demand-boost" value="${demandBoost}" placeholder="Ratio" style="width: 90px; font-size: 0.75rem; flex-shrink: 0;">
             </div>
           </div>
         </td>
