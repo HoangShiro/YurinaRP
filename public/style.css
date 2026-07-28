@@ -539,12 +539,16 @@ body.dark-theme {
   height: 14px;
 }
 
+.grp-chevron,
 .discord-group-header .grp-chevron {
   font-size: 0.75rem;
   color: #a78bfa;
   transition: transform 0.2s ease;
+  flex-shrink: 0;
 }
 
+.grp-chevron.collapsed,
+.discord-channel-entry.collapsed .grp-chevron,
 .discord-group-header.collapsed .grp-chevron {
   transform: rotate(-90deg);
 }

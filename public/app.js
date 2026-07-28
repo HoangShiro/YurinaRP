@@ -465,7 +465,7 @@
       const isLoreActive = state.selectedLoreId === lore.id;
 
       const loreItem = document.createElement('div');
-      loreItem.className = `discord-channel-entry ${isLoreActive ? 'active' : ''}`;
+      loreItem.className = `discord-channel-entry ${isBranchCollapsed ? 'collapsed' : ''} ${isLoreActive ? 'active' : ''}`;
       if (depth > 0) loreItem.style.paddingLeft = `${12 + depth * 12}px`;
       loreItem.dataset.lbid = lb.id;
       loreItem.dataset.loreid = lore.id;
