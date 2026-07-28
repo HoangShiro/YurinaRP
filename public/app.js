@@ -100,6 +100,7 @@
     lbDescInput: document.getElementById('lbDescInput'),
     lbPatternsInput: document.getElementById('lbPatternsInput'),
     lbDepthInput: document.getElementById('lbDepthInput'),
+    lbIncludeWorldState: document.getElementById('lbIncludeWorldState'),
     btnSaveLbSettings: document.getElementById('btnSaveLbSettings'),
     btnAddLoreUnderLb: document.getElementById('btnAddLoreUnderLb'),
     btnDeleteLorebook: document.getElementById('btnDeleteLorebook'),
@@ -343,6 +344,182 @@
   }
 
   // --- TREE RENDERING (Discord Channel List Style) ---
+  function buildFrontendLoreHierarchy(lores) {
+    if (!Array.isArray(lores) || lores.length === 0) return { topLevelTree: [] };
+
+    const loreMap = new Map();
+    const nodeMap = new Map();
+
+    lores.forEach(l => {
+      if (l.id) loreMap.set(String(l.id).toLowerCase().trim(), l);
+      if (l.name) loreMap.set(String(l.name).toLowerCase().trim(), l);
+
+      nodeMap.set(l, {
+        lore: l,
+        children: [],
+        parentNode: null
+      });
+    });
+
+    const rootNodes = [];
+    const flatGroupsMap = new Map();
+
+    lores.forEach(l => {
+      const node = nodeMap.get(l);
+      const parentRef = (l.parent_id || l.parent_name || l.group || '').trim().toLowerCase();
+      const parentLore = parentRef ? loreMap.get(parentRef) : null;
+
+      if (parentLore && parentLore !== l) {
+        const parentNode = nodeMap.get(parentLore);
+        if (parentNode) {
+          parentNode.children.push(node);
+          node.parentNode = parentNode;
+        } else {
+          rootNodes.push(node);
+        }
+      } else {
+        const grpName = l.group || 'General';
+        if (!flatGroupsMap.has(grpName)) {
+          flatGroupsMap.set(grpName, []);
+        }
+        flatGroupsMap.get(grpName).push(node);
+      }
+    });
+
+    const topLevelTree = [];
+    const processedLores = new Set();
+
+    lores.forEach(l => {
+      const node = nodeMap.get(l);
+      if (!node.parentNode && !processedLores.has(l)) {
+        const grpName = l.group || 'General';
+        const isGroupALore = loreMap.has(grpName.toLowerCase().trim());
+
+        if (!isGroupALore && flatGroupsMap.has(grpName)) {
+          const groupNodes = flatGroupsMap.get(grpName).filter(n => !n.parentNode);
+          if (groupNodes.length > 0) {
+            topLevelTree.push({
+              type: 'group',
+              name: grpName,
+              children: groupNodes
+            });
+            groupNodes.forEach(gn => processedLores.add(gn.lore));
+          }
+        } else {
+          topLevelTree.push({
+            type: 'lore',
+            node
+          });
+          processedLores.add(l);
+        }
+      }
+    });
+
+    return { topLevelTree, nodeMap };
+  }
+
+  function renderTreeNodeDOM(lb, item, depth = 0) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tree-node-wrapper';
+
+    if (item.type === 'group') {
+      const grpKey = `${lb.id}:grp:${item.name}`;
+      const isGrpCollapsed = state.collapsedGroupKeys.has(grpKey);
+
+      const grpHeader = document.createElement('div');
+      grpHeader.className = `discord-group-header ${isGrpCollapsed ? 'collapsed' : ''}`;
+      if (depth > 0) grpHeader.style.paddingLeft = `${12 + depth * 10}px`;
+
+      grpHeader.innerHTML = `
+        <i data-lucide="chevron-down" class="grp-chevron"></i>
+        <i data-lucide="folder" class="grp-icon"></i>
+        <span>${item.name} (${item.children.length})</span>
+      `;
+
+      grpHeader.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.collapsedGroupKeys.has(grpKey)) {
+          state.collapsedGroupKeys.delete(grpKey);
+        } else {
+          state.collapsedGroupKeys.add(grpKey);
+        }
+        saveCollapsedStates();
+        renderHierarchyTree();
+      });
+
+      const grpChildren = document.createElement('div');
+      grpChildren.className = `discord-group-children ${isGrpCollapsed ? 'collapsed' : ''}`;
+
+      item.children.forEach(childNode => {
+        grpChildren.appendChild(renderTreeNodeDOM(lb, { type: 'lore', node: childNode }, depth + 1));
+      });
+
+      wrapper.appendChild(grpHeader);
+      wrapper.appendChild(grpChildren);
+    } else if (item.type === 'lore') {
+      const node = item.node;
+      const lore = node.lore;
+      const loreKey = `${lb.id}:lore:${lore.id}`;
+      const hasChildren = node.children.length > 0;
+      const isBranchCollapsed = state.collapsedGroupKeys.has(loreKey);
+      const isLoreActive = state.selectedLoreId === lore.id;
+
+      const loreItem = document.createElement('div');
+      loreItem.className = `discord-channel-entry ${isLoreActive ? 'active' : ''}`;
+      if (depth > 0) loreItem.style.paddingLeft = `${12 + depth * 12}px`;
+      loreItem.dataset.lbid = lb.id;
+      loreItem.dataset.loreid = lore.id;
+
+      const chevronIcon = hasChildren
+        ? `<i data-lucide="chevron-down" class="grp-chevron ${isBranchCollapsed ? 'collapsed' : ''}" style="margin-right: 4px;"></i>`
+        : '';
+      const typeIcon = hasChildren
+        ? `<i data-lucide="folder" class="grp-icon" style="margin-right: 6px;"></i>`
+        : `<i data-lucide="hash" class="channel-hash-icon"></i>`;
+
+      const headBadge = lore.is_group_head ? `<i data-lucide="crown" class="group-head-crown" title="Group Head"></i>` : '';
+
+      loreItem.innerHTML = `
+        <div class="channel-title-group" style="display: flex; align-items: center; gap: 4px;">
+          ${chevronIcon}
+          ${typeIcon}
+          <span class="channel-name">${lore.name || 'Untitled Lore'}</span>
+          ${headBadge}
+        </div>
+      `;
+
+      loreItem.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (hasChildren && e.target.closest('.grp-chevron')) {
+          if (state.collapsedGroupKeys.has(loreKey)) {
+            state.collapsedGroupKeys.delete(loreKey);
+          } else {
+            state.collapsedGroupKeys.add(loreKey);
+          }
+          saveCollapsedStates();
+          renderHierarchyTree();
+          return;
+        }
+        selectLoreEntry(lb.id, lore.id);
+      });
+
+      wrapper.appendChild(loreItem);
+
+      if (hasChildren) {
+        const branchChildren = document.createElement('div');
+        branchChildren.className = `discord-group-children ${isBranchCollapsed ? 'collapsed' : ''}`;
+
+        node.children.forEach(childNode => {
+          branchChildren.appendChild(renderTreeNodeDOM(lb, { type: 'lore', node: childNode }, depth + 1));
+        });
+
+        wrapper.appendChild(branchChildren);
+      }
+    }
+
+    return wrapper;
+  }
+
   function renderHierarchyTree() {
     if (!el.treeContainer) return;
     
@@ -386,66 +563,10 @@
       const loresGroup = document.createElement('div');
       loresGroup.className = `discord-lores-group ${isLbCollapsed ? 'collapsed' : ''}`;
 
-      const groupsMap = new Map();
-      (lb.lores || []).forEach(lore => {
-        const grp = lore.group || 'General';
-        if (!groupsMap.has(grp)) groupsMap.set(grp, []);
-        groupsMap.get(grp).push(lore);
-      });
+      const { topLevelTree } = buildFrontendLoreHierarchy(lb.lores || []);
 
-      groupsMap.forEach((loresList, grpName) => {
-        const grpKey = `${lb.id}:${grpName}`;
-        const isGrpCollapsed = state.collapsedGroupKeys.has(grpKey);
-
-        const grpHeader = document.createElement('div');
-        grpHeader.className = `discord-group-header ${isGrpCollapsed ? 'collapsed' : ''}`;
-        grpHeader.innerHTML = `
-          <i data-lucide="chevron-down" class="grp-chevron"></i>
-          <i data-lucide="folder" class="grp-icon"></i>
-          <span>${grpName} (${loresList.length})</span>
-        `;
-
-        grpHeader.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (state.collapsedGroupKeys.has(grpKey)) {
-            state.collapsedGroupKeys.delete(grpKey);
-          } else {
-            state.collapsedGroupKeys.add(grpKey);
-          }
-          saveCollapsedStates();
-          renderHierarchyTree();
-        });
-
-        const grpChildren = document.createElement('div');
-        grpChildren.className = `discord-group-children ${isGrpCollapsed ? 'collapsed' : ''}`;
-
-        loresList.forEach(lore => {
-          const isLoreActive = state.selectedLoreId === lore.id;
-          const loreItem = document.createElement('div');
-          loreItem.className = `discord-channel-entry ${isLoreActive ? 'active' : ''}`;
-          loreItem.dataset.lbid = lb.id;
-          loreItem.dataset.loreid = lore.id;
-
-          const headBadge = lore.is_group_head ? `<i data-lucide="crown" class="group-head-crown" title="Group Head"></i>` : '';
-
-          loreItem.innerHTML = `
-            <div class="channel-title-group">
-              <i data-lucide="hash" class="channel-hash-icon"></i>
-              <span class="channel-name">${lore.name || 'Untitled Lore'}</span>
-              ${headBadge}
-            </div>
-          `;
-
-          loreItem.addEventListener('click', (e) => {
-            e.stopPropagation();
-            selectLoreEntry(lb.id, lore.id);
-          });
-
-          grpChildren.appendChild(loreItem);
-        });
-
-        loresGroup.appendChild(grpHeader);
-        loresGroup.appendChild(grpChildren);
+      topLevelTree.forEach(treeItem => {
+        loresGroup.appendChild(renderTreeNodeDOM(lb, treeItem, 0));
       });
 
       // Category Header Event Listeners
@@ -691,6 +812,9 @@
     el.lbDescInput.value = lb.description || '';
     el.lbPatternsInput.value = (lb.settings?.day_trigger_patterns || []).join('\n');
     el.lbDepthInput.value = lb.settings?.depth_scan || 2;
+    if (el.lbIncludeWorldState) {
+      el.lbIncludeWorldState.checked = (typeof lb.settings?.include_world_state === 'boolean') ? lb.settings.include_world_state : true;
+    }
   }
 
   function selectLoreEntry(lbId, loreId) {
@@ -1049,6 +1173,7 @@
       lb.status = el.lbStatusSelect.value;
       lb.description = el.lbDescInput.value.trim();
       lb.settings = {
+        include_world_state: el.lbIncludeWorldState ? el.lbIncludeWorldState.checked : false,
         insertion_mode: el.lbInsertionSelect.value,
         depth_scan: parseInt(el.lbDepthInput.value, 10) || 2,
         day_trigger_patterns: el.lbPatternsInput.value.split('\n').map(p => p.trim()).filter(Boolean)

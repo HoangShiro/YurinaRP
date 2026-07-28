@@ -56,17 +56,25 @@ function setNestedValue(obj, pathStr, value) {
 /**
  * Computes exact daily gross revenue, cost burn, and net profit from catalog items.
  */
-function computeCatalogTotals(catalog, targetCategories = null) {
-  if (!catalog) return { grossGold: 0, costGold: 0, netGold: 0 };
+/**
+ * Computes exact daily gross revenue, cost burn, and net profit from catalog items.
+ * Generically evaluates all categories and respects item start_date (launch day).
+ */
+function computeCatalogTotals(catalog, targetCategories = null, currentDay = null) {
+  if (!catalog || typeof catalog !== 'object') return { grossGold: 0, costGold: 0, netGold: 0 };
   let totalGrossCopper = 0;
   let totalCostCopper = 0;
 
-  const categories = targetCategories || ['retail_items', 'fast_food_menu', 'restaurant_menu', 'cosmetics_and_perfumes', 'yuribank_cards'];
+  const categories = targetCategories || Object.keys(catalog);
 
   for (const cat of categories) {
     const list = catalog[cat];
     if (Array.isArray(list)) {
       for (const item of list) {
+        if (currentDay !== null && item.start_date && typeof item.start_date === 'number') {
+          if (currentDay < item.start_date) continue;
+        }
+
         const price = item.price_copper || 0;
         const cost = item.unit_cost_copper || 0;
         const sold = item.daily_units_sold || 0;
@@ -107,9 +115,9 @@ function parseDayFromMessages(messages) {
  */
 async function processWorldStateTick(messages = null) {
   const state = await fetchFullWorldState();
-  if (!state || !state.meta || !state.financials) return state;
+  if (!state || !state.meta) return state;
 
-  const currentDayInState = state.meta.current_day || 242;
+  const currentDayInState = state.meta.current_day || 1;
   const lastUpdatedDay = state.meta.last_updated_day || currentDayInState;
 
   let newDay = currentDayInState;
@@ -124,27 +132,29 @@ async function processWorldStateTick(messages = null) {
 
   // 0. Compute dynamic totals directly from Catalog & Formulas if present
   if (state.catalog) {
-    const storeCatTotals = computeCatalogTotals(state.catalog, ['retail_items', 'fast_food_menu', 'restaurant_menu']);
+    const storeCatTotals = computeCatalogTotals(state.catalog, null, newDay);
     if (storeCatTotals.grossGold > 0) {
+      if (!state.financials) state.financials = {};
       if (!state.financials.systems) state.financials.systems = {};
-      if (!state.financials.systems.yuri_store) state.financials.systems.yuri_store = {};
       
-      // Dynamically set yuri_store figures using catalog sum
-      state.financials.systems.yuri_store.daily_gross_revenue = storeCatTotals.grossGold;
-      state.financials.systems.yuri_store.daily_operating_burn = storeCatTotals.costGold;
+      const primarySysKey = Object.keys(state.financials.systems)[0] || 'main_store';
+      if (!state.financials.systems[primarySysKey]) state.financials.systems[primarySysKey] = {};
+
+      state.financials.systems[primarySysKey].daily_gross_revenue = storeCatTotals.grossGold;
+      state.financials.systems[primarySysKey].daily_operating_burn = storeCatTotals.costGold;
     }
   }
 
-  // Dynamic YuriBank Revenue Formula (Int Fees + Cards + Holo Orbs)
+  // Dynamic Bank / Financial System Fees calculation if present
   if (state.financials?.systems?.yuri_bank) {
     const bankSys = state.financials.systems.yuri_bank;
-    const intVol = bankSys.daily_international_volume_gold || 39200000;
-    const intFeeRatio = bankSys.net_fee_ratio || 0.0025; // 0.25% net YuriBank share
-    const intFeesNet = Math.round((intVol * intFeeRatio) * 100) / 100; // ~98,000 Gold
+    const intVol = bankSys.daily_international_volume_gold || 0;
+    const intFeeRatio = bankSys.net_fee_ratio || 0.0025;
+    const intFeesNet = Math.round((intVol * intFeeRatio) * 100) / 100;
 
-    const cardCat = computeCatalogTotals(state.catalog, ['yuribank_cards']);
-    const cardSalesGross = cardCat.grossGold || 135000;
-    const orbSales = bankSys.daily_holo_orb_sales_gold || 3000;
+    const cardCat = computeCatalogTotals(state.catalog, ['yuribank_cards'], newDay);
+    const cardSalesGross = cardCat.grossGold || 0;
+    const orbSales = bankSys.daily_holo_orb_sales_gold || 0;
 
     bankSys.daily_int_fee_revenue = intFeesNet;
     bankSys.daily_card_sales_revenue = cardSalesGross;
@@ -153,24 +163,30 @@ async function processWorldStateTick(messages = null) {
 
   // 1. Calculate individual system net surpluses and dynamic host shares
   let consolidatedDailyNetGold = 0;
+  let consolidatedDailyGrossGold = 0;
+  let consolidatedDailyBurnGold = 0;
   const finSystems = state.financials?.systems || {};
 
   for (const [sysKey, sysData] of Object.entries(finSystems)) {
     const gross = sysData.daily_gross_revenue || 0;
     const burn = sysData.daily_operating_burn || 0;
     
-    // Dynamic Host Nation Profit Share calculation if ratio exists
     let hostShare = sysData.host_share || 0;
     if (sysData.host_share_ratio !== undefined && sysData.host_share_ratio !== null) {
       hostShare = Math.round((gross - burn) * sysData.host_share_ratio * 100) / 100;
-      sysData.host_share = hostShare; // Update dynamic host share
+      sysData.host_share = hostShare;
     }
 
     let net = Math.round((gross - burn - hostShare) * 100) / 100;
     sysData.daily_net_surplus_evaluated = net;
     consolidatedDailyNetGold += net;
+    consolidatedDailyGrossGold += gross;
+    consolidatedDailyBurnGold += burn;
   }
 
+  if (!state.financials) state.financials = {};
+  state.financials.consolidated_daily_gross_revenue_gold = Math.round(consolidatedDailyGrossGold * 100) / 100;
+  state.financials.consolidated_daily_operating_burn_gold = Math.round(consolidatedDailyBurnGold * 100) / 100;
   state.financials.consolidated_daily_net_surplus_gold = Math.round(consolidatedDailyNetGold * 100) / 100;
 
   // 2. If time elapsed (deltaDays > 0), run time-step financial accumulation!
@@ -181,16 +197,15 @@ async function processWorldStateTick(messages = null) {
     const totalAccumulatedPlatinum = dailyNetPlatinum * deltaDays;
 
     if (!state.financials.reserves) state.financials.reserves = {};
-    const currentReserves = state.financials.reserves.ley_line_platinum || 308744.5;
-    state.financials.reserves.ley_line_platinum = Math.round((currentReserves + totalAccumulatedPlatinum) * 100) / 100;
+    const primaryReserveKey = Object.keys(state.financials.reserves)[0] || 'primary_reserves';
+    const currentReserves = state.financials.reserves[primaryReserveKey] || 0;
+    state.financials.reserves[primaryReserveKey] = Math.round((currentReserves + totalAccumulatedPlatinum) * 100) / 100;
 
-    // Update state meta days
     state.meta.current_day = newDay;
     state.meta.last_updated_day = newDay;
 
-    console.log(`[WORLD-ENGINE] ✓ Added +${totalAccumulatedPlatinum.toFixed(2)} Platinum to Ley Line Reserves. New Balance: ${state.financials.reserves.ley_line_platinum.toFixed(2)} Platinum.`);
+    console.log(`[WORLD-ENGINE] ✓ Added +${totalAccumulatedPlatinum.toFixed(2)} Platinum to ${primaryReserveKey}. New Balance: ${state.financials.reserves[primaryReserveKey].toFixed(2)} Platinum.`);
 
-    // Persist updated state to Upstash Redis asynchronously
     saveFullWorldState(state).catch(err => {
       console.warn('[WORLD-ENGINE] Failed to auto-save state tick to Upstash:', err.message);
     });
@@ -200,37 +215,137 @@ async function processWorldStateTick(messages = null) {
 }
 
 /**
- * Formats a clean, compact markdown block [WORLD STATE SNAPSHOT] for System Prompt injection
+ * Formats a clean, compact, 100% data-driven markdown block [WORLD STATE SNAPSHOT]
+ * Generates sections ONLY from actual data in state without any hardcoded fallbacks.
  */
 function compileWorldStateSnapshot(state) {
-  if (!state || !state.meta || !state.financials) return '';
+  if (!state || typeof state !== 'object') return '';
 
-  const meta = state.meta;
-  const fin = state.financials;
+  const meta = state.meta || {};
+  const fin = state.financials || {};
   const sys = state.systems || {};
   const pers = state.personnel || {};
   const res = fin.reserves || {};
 
-  const consolidatedGold = fin.consolidated_daily_net_surplus_gold || 300513;
-  const leyLinePlatinum = res.ley_line_platinum || 308744.5;
+  const worldName = (meta.world_name || 'STAGAIA').toUpperCase();
+  const currentDay = meta.current_day || 1;
 
-  return `[WORLD STATE SNAPSHOT — STAGAIA DAY ${meta.current_day || 242}]
-• Executive Governance: Chairwoman Yurina Shirayuki | Board: Lyra (Finance), Seraphina (Affairs), Lillith (Transport), Elara (Health)
-• Financial Ledger & Cash Flow (Daily):
-  - Consolidated Daily Gross Income: ~389,104 Gold/day
-  - Consolidated Daily Operating Burn: ~88,591 Gold/day
-  - Consolidated Daily Net Surplus: ~${consolidatedGold.toLocaleString()} Gold/day (~${(consolidatedGold / 100).toFixed(2)} Platinum/day)
-• Cumulative Reserves:
-  - Ley Line Net Reserves: ~${leyLinePlatinum.toLocaleString()} Platinum (~${(leyLinePlatinum / 1000).toFixed(2)} Million Gold equivalent)
-  - YuriStore Liquid Reserve: ~${res.store_liquid_platinum || 1225} Platinum | Guild Escrow: ~${res.guild_escrow_platinum || 260.15} Platinum
-  - Material Reserves: Levium ${res.levium_reserve_kg || 320} kg | Yurium Superalloy ${res.yurium_reserve_kg || 70} kg
-• Infrastructure & Network Scope:
-  - YuriStation Transit: ${sys.yuri_station?.total_stations || 16277} Stations across 7 nations | ${sys.yuri_station?.road_network_km || 103000} km Highways
-  - YuriTrain Railway: ${sys.yuri_train?.rail_network_km || 14000} km Rail | 6 Corridors | 200–450 km/h (50% Host Profit Share)
-  - YuriAerial Network: ${sys.yuri_aerial?.phase_1_fleet_total || 101} Aircraft Fleet (Express 1,800km/h, Passenger, Cargo) across 16,277 airports
-  - YuriBank & Holo Orb: ${sys.yuri_bank?.atms || 21277} ATMs | ${sys.yuri_bank?.branches || 21797} Branches | ${sys.yuri_bank?.cardholders_total || 88200000} Cardholders | ${sys.yuri_bank?.holo_orbs_deployed || 11247} Holo Orbs
-  - Wand Leasing: ${sys.wand_leasing?.builder_wands_leased || 350} Builder Wands + ${sys.wand_leasing?.forging_stabilizer_pairs_leased || 26} Forging/Stabilizer Wand Pairs leased globally
-• Core Technical Team: 30 Khaldor Master Engineers (Bruni & Durinn) | 59 Interior Specialists | 32 HQ Staff | 2,975 YuriERS Medical Staff`;
+  const lines = [];
+  lines.push(`[WORLD STATE SNAPSHOT — ${worldName} DAY ${currentDay}]`);
+
+  // 1. Executive Governance (if personnel.executive_board exists)
+  if (Array.isArray(pers.executive_board) && pers.executive_board.length > 0) {
+    const chair = pers.executive_board.find(p => (p.role || '').toLowerCase().includes('chair') || (p.role || '').toLowerCase().includes('founder') || (p.role || '').toLowerCase().includes('owner'));
+    const members = pers.executive_board.filter(p => p !== chair);
+    const chairStr = chair ? `${chair.name} (${chair.role || 'Leader'})` : '';
+    const membersStr = members.map(m => {
+      const roleStr = m.role ? ` (${m.role})` : '';
+      return `${m.name}${roleStr}`;
+    }).join(', ');
+    lines.push(`• Executive Governance: ${chairStr ? chairStr + ' | Board: ' : 'Board: '}${membersStr}`);
+  } else if (pers.executive_governance) {
+    lines.push(`• Executive Governance: ${pers.executive_governance}`);
+  }
+
+  // 2. Financial Ledger & Cash Flow (if financials exist)
+  let grossGold = fin.consolidated_daily_gross_revenue_gold;
+  let burnGold = fin.consolidated_daily_operating_burn_gold;
+
+  if (grossGold === undefined || burnGold === undefined) {
+    if (fin.systems && Object.keys(fin.systems).length > 0) {
+      let sumGross = 0;
+      let sumBurn = 0;
+      Object.values(fin.systems).forEach(s => {
+        sumGross += s.daily_gross_revenue || 0;
+        sumBurn += s.daily_operating_burn || 0;
+      });
+      grossGold = grossGold ?? sumGross;
+      burnGold = burnGold ?? sumBurn;
+    }
+  }
+
+  if (grossGold !== undefined || burnGold !== undefined || fin.consolidated_daily_net_surplus_gold !== undefined) {
+    const g = grossGold || 0;
+    const b = burnGold || 0;
+    const net = fin.consolidated_daily_net_surplus_gold ?? (g - b);
+
+    const finParts = [];
+    if (g > 0) finParts.push(`Gross Income: ~${Math.round(g).toLocaleString()} Gold/day`);
+    if (b > 0) finParts.push(`Operating Burn: ~${Math.round(b).toLocaleString()} Gold/day`);
+    finParts.push(`Net Surplus: ~${Math.round(net).toLocaleString()} Gold/day (~${(net / 100).toFixed(2)} Platinum/day)`);
+
+    lines.push(`• Financial Ledger & Cash Flow:\n  - ${finParts.join('\n  - ')}`);
+  }
+
+  // 3. Cumulative Reserves (if reserves exist)
+  if (res && Object.keys(res).length > 0) {
+    const reserveParts = [];
+    for (const [key, val] of Object.entries(res)) {
+      if (val !== null && val !== undefined) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const formattedVal = typeof val === 'number' ? val.toLocaleString() : val;
+        reserveParts.push(`${label}: ${formattedVal}`);
+      }
+    }
+    if (reserveParts.length > 0) {
+      lines.push(`• Cumulative Reserves:\n  - ${reserveParts.join(' | ')}`);
+    }
+  }
+
+  // 4. Infrastructure & Systems Scope (Dynamically iterate over ANY system in state.systems)
+  if (sys && Object.keys(sys).length > 0) {
+    const sysLines = [];
+    for (const [sysKey, sysData] of Object.entries(sys)) {
+      if (!sysData || typeof sysData !== 'object') continue;
+      const sysName = sysData.name || sysKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+      const details = [];
+      for (const [propKey, propVal] of Object.entries(sysData)) {
+        if (['name', 'daily_gross_revenue', 'daily_operating_burn', 'daily_net_surplus_evaluated'].includes(propKey)) continue;
+        if (typeof propVal === 'number' || typeof propVal === 'string') {
+          const propLabel = propKey.replace(/_/g, ' ');
+          const formattedVal = typeof propVal === 'number' ? propVal.toLocaleString() : propVal;
+          details.push(`${formattedVal} ${propLabel}`);
+        }
+      }
+      if (details.length > 0) {
+        sysLines.push(`  - ${sysName}: ${details.slice(0, 4).join(' | ')}`);
+      } else {
+        sysLines.push(`  - ${sysName}`);
+      }
+    }
+    if (sysLines.length > 0) {
+      lines.push(`• Infrastructure & Systems Scope:\n${sysLines.join('\n')}`);
+    }
+  }
+
+  // 5. Personnel & Roster (if key_technical_teams or field_network_personnel exist)
+  if (pers.key_technical_teams || pers.field_network_personnel) {
+    const techParts = [];
+    if (pers.key_technical_teams && typeof pers.key_technical_teams === 'object') {
+      for (const [teamKey, teamData] of Object.entries(pers.key_technical_teams)) {
+        if (typeof teamData === 'object' && teamData.count) {
+          const teamName = teamKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const leads = Array.isArray(teamData.lead) ? teamData.lead.join(' & ') : (teamData.lead || '');
+          techParts.push(`${teamData.count} ${teamName}${leads ? ` (${leads})` : ''}`);
+        }
+      }
+    }
+    if (pers.field_network_personnel && typeof pers.field_network_personnel === 'object') {
+      for (const [fieldKey, fieldVal] of Object.entries(pers.field_network_personnel)) {
+        if (typeof fieldVal === 'number' || typeof fieldVal === 'string') {
+          const fieldName = fieldKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          const formattedVal = typeof fieldVal === 'number' ? fieldVal.toLocaleString() : fieldVal;
+          techParts.push(`${formattedVal} ${fieldName}`);
+        }
+      }
+    }
+    if (techParts.length > 0) {
+      lines.push(`• Personnel & Roster: ${techParts.join(' | ')}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 module.exports = {

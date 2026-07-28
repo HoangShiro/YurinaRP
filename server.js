@@ -13,7 +13,7 @@ const { processEventTriggers } = require('./scripts/eventTriggers');
 const { applyAutoLineBreak, fixTextFormatting, StreamTextProcessor } = require('./scripts/formatFixer');
 const { fetchRemoteLorebookStore, saveRemoteLorebookStore, fetchRemoteLorebook, saveRemoteLorebook } = require('./scripts/upstashLorebook');
 const { fetchRemoteSystemPromptStore, saveRemoteSystemPromptStore } = require('./scripts/upstashSystemPrompt');
-const { compileLorebookStore, extractCurrentDay, isLorebookStoreActive } = require('./scripts/lorebookCompiler');
+const { compileLorebookStore, extractCurrentDay, isLorebookStoreActive, shouldIncludeWorldState } = require('./scripts/lorebookCompiler');
 const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/worldStateEngine');
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
@@ -450,16 +450,20 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
     // 1. Evaluate Base System Prompt
     const baseSystemPrompt = (systemPromptStore && systemPromptStore.system_prompt) ? systemPromptStore.system_prompt.trim() : '';
 
-    // Check if Lorebook & World State System is active (at least one Lorebook not set to 'Off')
+    // Check if Lorebook System is active and whether World State is enabled for active Lorebooks
     const loreActive = isLorebookStoreActive(store);
+    const worldStateActive = shouldIncludeWorldState(store);
 
     let worldSnapshot = '';
     let compiledLore = { compiledPrompt: '', insertionMode: 'context', activeCount: 0 };
 
     if (loreActive) {
+      compiledLore = compileLorebookStore(store, messages);
+    }
+
+    if (worldStateActive) {
       const worldState = await processWorldStateTick(messages);
       worldSnapshot = compileWorldStateSnapshot(worldState);
-      compiledLore = compileLorebookStore(store, messages);
     }
 
     // 4. Evaluate System Prompt Rules & Event Triggers
@@ -479,10 +483,10 @@ app.post('/v1/lorebooks/compile', async (req, res) => {
       systemContextSections.push(`--- [1] Base System Prompt ---\n${baseSystemPrompt}`);
     }
 
-    if (loreActive && worldSnapshot) {
+    if (worldStateActive && worldSnapshot) {
       systemContextSections.push(`--- [2] World State Snapshot ---\n${worldSnapshot}`);
     } else {
-      systemContextSections.push(`--- [2] World State Snapshot ---\n(World State System Disabled - All Lorebooks set to Off)`);
+      systemContextSections.push(`--- [2] World State Snapshot ---\n(World State System Disabled for active Lorebook(s))`);
     }
 
     if (loreActive && compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
@@ -725,14 +729,20 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
 
-    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active (at least one Lorebook not set to 'Off')
+    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active
     const loreActive = isLorebookStoreActive(lorebookStore);
-    if (loreActive) {
-      const worldState = await processWorldStateTick(messages);
-      const worldSnapshot = compileWorldStateSnapshot(worldState);
-      const compiledLore = compileLorebookStore(lorebookStore, messages);
+    const worldStateActive = shouldIncludeWorldState(lorebookStore);
 
-      const contextParts = [worldSnapshot];
+    if (loreActive) {
+      const compiledLore = compileLorebookStore(lorebookStore, messages);
+      const contextParts = [];
+
+      if (worldStateActive) {
+        const worldState = await processWorldStateTick(messages);
+        const worldSnapshot = compileWorldStateSnapshot(worldState);
+        if (worldSnapshot) contextParts.push(worldSnapshot);
+      }
+
       if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
         contextParts.push(compiledLore.compiledPrompt);
       }

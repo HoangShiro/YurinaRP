@@ -6,6 +6,7 @@
       "description": "Comprehensive corporate, commercial, logistics, financial, and welfare lore for Yuri HQ across Stagaia.",
       "status": "Active",
       "settings": {
+        "include_world_state": true,
         "day_trigger_patterns": [
           "\\[\\s*🕒?\\s*Day\\s+(\\d+)",
           "\\[Day\\s+(\\d+)"
@@ -54,7 +55,7 @@
         {
           "id": "lore_yuristore_main",
           "name": "YuriStore Flagship Retail & Restaurant",
-          "group": "YuriHQ",
+          "group": "lore_yuri_hq_main",
           "is_group_head": false,
           "trigger": {
             "keywords": [
@@ -70,6 +71,30 @@
           },
           "prompt_area": {
             "definition": "Flagship 3-story retail storefront, automated fast food counter, and standard/premium restaurants serving Solis Aeterna.",
+            "infrastructure": [
+              {
+                "id": "metric_solis_cardholders",
+                "name": "Solis Merchant Cardholders",
+                "category": "coverage",
+                "base_value": 10000,
+                "daily_growth": 100,
+                "start_date": 1,
+                "unit": "members",
+                "subscription_revenue_per_unit": 2,
+                "description": "Active loyalty cardholders in Solis Aeterna"
+              },
+              {
+                "id": "metric_logistics_highways",
+                "name": "Magic Carriage Highways",
+                "category": "infrastructure",
+                "base_value": 150,
+                "daily_growth": 1.5,
+                "start_date": 1,
+                "unit": "km",
+                "maintenance_cost_per_unit": 50,
+                "description": "Paved magic highways for transport and retail distribution"
+              }
+            ],
             "catalog": [
               {
                 "id": "item_lamp_small",
@@ -78,6 +103,10 @@
                 "price_copper": 5000,
                 "unit_cost_copper": 1000,
                 "daily_units_sold": 2000,
+                "demand_binding": {
+                  "metric_id": "metric_solis_cardholders",
+                  "boost_per_1k_units": 0.05
+                },
                 "monthly_units_sold": 60000,
                 "sold_out": false,
                 "start_date": 11,
@@ -102,6 +131,10 @@
                 "price_copper": 1000,
                 "unit_cost_copper": 300,
                 "daily_units_sold": 3000,
+                "capacity_binding": {
+                  "metric_id": "metric_logistics_highways",
+                  "units_per_metric": 18
+                },
                 "monthly_units_sold": 90000,
                 "sold_out": false,
                 "start_date": 14,
@@ -162,7 +195,7 @@
         {
           "id": "lore_complex_production",
           "name": "Central Complex & YuriAerial Manufacturing Plant",
-          "group": "YuriHQ",
+          "group": "lore_yuri_hq_main",
           "is_group_head": false,
           "trigger": {
             "keywords": [
