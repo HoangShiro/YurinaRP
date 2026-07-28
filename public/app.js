@@ -116,6 +116,8 @@
     subTabs: document.querySelectorAll('.sub-tab'),
     subTabContents: document.querySelectorAll('.sub-tab-content'),
     loreDefInput: document.getElementById('loreDefInput'),
+    btnAddInfraItem: document.getElementById('btnAddInfraItem'),
+    infraTableBody: document.getElementById('infraTableBody'),
     btnAddCatalogItem: document.getElementById('btnAddCatalogItem'),
     catalogTableBody: document.getElementById('catalogTableBody'),
     catalogCalcPreview: document.getElementById('catalogCalcPreview'),
@@ -843,6 +845,7 @@
     const area = lore.prompt_area || {};
     el.loreDefInput.value = area.definition || '';
 
+    renderInfraTable(area.infrastructure || area.scale_metrics || []);
     renderCatalogTable(area.catalog || []);
     renderKvContainer(el.staffKvContainer, area.staff || {}, 'Staff Name / Role (e.g. Yurina)', 'Duties, Schedule, Salary, Description');
     renderKvContainer(el.policyKvContainer, area.policy || {}, 'Policy Name (e.g. Return Policy)', 'Policy terms & details');
@@ -926,6 +929,63 @@
     if (s > 0) parts.push(`${s}S`);
     if (c > 0 || parts.length === 0) parts.push(`${c}C`);
     return parts.join(' ');
+  }
+
+  // --- INFRASTRUCTURE METRICS TABLE MANAGERS ---
+  function renderInfraTable(infrastructure) {
+    if (!el.infraTableBody) return;
+    el.infraTableBody.innerHTML = '';
+    (infrastructure || []).forEach((item, index) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="form-input form-input-sm infra-id" value="${item.id || ''}" placeholder="e.g. metric_highways"></td>
+        <td><input type="text" class="form-input form-input-sm infra-name" value="${item.name || ''}" placeholder="Metric Name"></td>
+        <td><input type="text" class="form-input form-input-sm infra-unit" value="${item.unit || ''}" placeholder="e.g. km or members"></td>
+        <td><input type="number" class="form-input form-input-sm infra-base" value="${item.base_value || 0}"></td>
+        <td><input type="number" step="any" class="form-input form-input-sm infra-growth" value="${item.daily_growth || 0}"></td>
+        <td><input type="number" min="1" class="form-input form-input-sm infra-start-date" value="${item.start_date || 1}"></td>
+        <td><input type="number" step="any" class="form-input form-input-sm infra-maint" value="${item.maintenance_cost_per_unit || 0}"></td>
+        <td><input type="number" step="any" class="form-input form-input-sm infra-sub" value="${item.subscription_revenue_per_unit || 0}"></td>
+        <td>
+          <button class="btn-icon btn-icon-danger btn-delete-infra" data-index="${index}" title="Remove Metric">
+            <i data-lucide="trash"></i>
+          </button>
+        </td>
+      `;
+      el.infraTableBody.appendChild(tr);
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function getInfraFromForm() {
+    if (!el.infraTableBody) return [];
+    const infrastructure = [];
+    const rows = el.infraTableBody.querySelectorAll('tr');
+    rows.forEach(tr => {
+      const id = tr.querySelector('.infra-id').value.trim();
+      const name = tr.querySelector('.infra-name').value.trim();
+      const unit = tr.querySelector('.infra-unit').value.trim();
+      const base_value = parseFloat(tr.querySelector('.infra-base').value) || 0;
+      const daily_growth = parseFloat(tr.querySelector('.infra-growth').value) || 0;
+      const start_date = parseInt(tr.querySelector('.infra-start-date').value, 10) || 1;
+      const maintenance_cost_per_unit = parseFloat(tr.querySelector('.infra-maint').value) || 0;
+      const subscription_revenue_per_unit = parseFloat(tr.querySelector('.infra-sub').value) || 0;
+
+      if (id || name) {
+        infrastructure.push({
+          id: id || `metric_${Date.now()}`,
+          name: name || 'Untitled Metric',
+          unit,
+          base_value,
+          daily_growth,
+          start_date,
+          maintenance_cost_per_unit,
+          subscription_revenue_per_unit
+        });
+      }
+    });
+    return infrastructure;
   }
 
   // --- CATALOG TABLE & CALCULATION ---
@@ -1274,6 +1334,40 @@
       });
     }
 
+    if (el.btnAddInfraItem) {
+      el.btnAddInfraItem.addEventListener('click', () => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="text" class="form-input form-input-sm infra-id" value="metric_${Date.now()}" placeholder="e.g. metric_highways"></td>
+          <td><input type="text" class="form-input form-input-sm infra-name" value="New Infrastructure Metric" placeholder="Metric Name"></td>
+          <td><input type="text" class="form-input form-input-sm infra-unit" value="units" placeholder="e.g. km or members"></td>
+          <td><input type="number" class="form-input form-input-sm infra-base" value="100"></td>
+          <td><input type="number" step="any" class="form-input form-input-sm infra-growth" value="1"></td>
+          <td><input type="number" min="1" class="form-input form-input-sm infra-start-date" value="1"></td>
+          <td><input type="number" step="any" class="form-input form-input-sm infra-maint" value="0"></td>
+          <td><input type="number" step="any" class="form-input form-input-sm infra-sub" value="0"></td>
+          <td>
+            <button class="btn-icon btn-icon-danger btn-delete-infra" title="Remove Metric">
+              <i data-lucide="trash"></i>
+            </button>
+          </td>
+        `;
+        tr.querySelector('.btn-delete-infra').addEventListener('click', () => tr.remove());
+        el.infraTableBody.appendChild(tr);
+        if (window.lucide) window.lucide.createIcons();
+      });
+    }
+
+    if (el.infraTableBody) {
+      el.infraTableBody.addEventListener('click', (e) => {
+        const btnDelete = e.target.closest('.btn-delete-infra');
+        if (btnDelete) {
+          const tr = btnDelete.closest('tr');
+          if (tr) tr.remove();
+        }
+      });
+    }
+
     el.btnAddStaffRow.addEventListener('click', () => addKvRow(el.staffKvContainer, '', '', 'Staff Name / Role (e.g. Yurina)', 'Duties, Schedule, Salary, Description'));
     el.btnAddPolicyRow.addEventListener('click', () => addKvRow(el.policyKvContainer, '', '', 'Policy Name (e.g. Return Policy)', 'Policy terms & details'));
     el.btnAddCustomRow.addEventListener('click', () => addKvRow(el.customKvContainer, '', '', 'Metadata Key', 'Value / Description'));
@@ -1304,6 +1398,7 @@
       lore.trigger = { keywords, trigger_rate };
       lore.prompt_area = {
         definition: el.loreDefInput.value.trim(),
+        infrastructure: getInfraFromForm(),
         catalog: getCatalogFromForm(),
         staff: getDictFromKvContainer(el.staffKvContainer),
         policy: getDictFromKvContainer(el.policyKvContainer),

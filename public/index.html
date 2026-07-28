@@ -252,6 +252,7 @@
                 <div class="prompt-tabs-wrapper mt-6">
                   <div class="sub-tab-menu">
                     <button class="sub-tab active" data-subtab="definition">Definition</button>
+                    <button class="sub-tab" data-subtab="infrastructure">Infrastructure & Scale</button>
                     <button class="sub-tab" data-subtab="catalog">Catalog & Business Engine</button>
                     <button class="sub-tab" data-subtab="staff">Staff Roster</button>
                     <button class="sub-tab" data-subtab="policy">Policies & Terms</button>
@@ -263,6 +264,40 @@
                     <div class="form-group">
                       <label for="loreDefInput">Definition / Description Text:</label>
                       <textarea id="loreDefInput" class="form-textarea" rows="6" placeholder="Enter the fundamental description or background context for this lore entry..."></textarea>
+                    </div>
+                  </div>
+
+                  <!-- Sub-Tab 2: Infrastructure & Scale Metrics -->
+                  <div class="sub-tab-content" id="subtab-infrastructure">
+                    <div class="catalog-header-bar">
+                      <div>
+                        <h4>Infrastructure & Scale Metrics</h4>
+                        <span class="text-sub">Manage physical assets (km roads, branches, area) and market coverage (cardholders, active users).</span>
+                      </div>
+                      <button class="btn btn-primary btn-xs" id="btnAddInfraItem">
+                        <i data-lucide="plus"></i> Add Infrastructure Metric
+                      </button>
+                    </div>
+
+                    <div class="table-responsive mt-3">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            <th>Metric ID</th>
+                            <th>Metric Name</th>
+                            <th>Unit</th>
+                            <th>Base Value</th>
+                            <th>Daily Growth</th>
+                            <th>Start Date</th>
+                            <th>Maint. Cost/Unit</th>
+                            <th>Sub. Income/Unit</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="infraTableBody">
+                          <!-- Populated dynamically -->
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
