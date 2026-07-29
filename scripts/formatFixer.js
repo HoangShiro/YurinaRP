@@ -6,28 +6,55 @@
 function applyAutoLineBreak(text) {
   if (typeof text !== 'string' || !text) return text;
 
-  // 1. Action block (*...*) followed by Dialogue ("..."), Thought (`...`), Divider (---), or Status ([...])
-  text = text.replace(/(\*[^\*\n]+\*)[ \t]*(?="|`|---|\[(?=[^\]]*\]))/g, '$1\n\n');
+  // 1. Same-line adjacent RP elements (separated by horizontal spaces)
+  // e.g. *Action.* "Dialogue." -> *Action.*\n\n"Dialogue."
+  text = text.replace(/(\*[^\*\n]+\*)[ \t]+(?="|`|['‘]|\[(?=[^\]]*\]))/g, '$1\n\n');
+  text = text.replace(/("[^"\n]+"[^\n]*?)[ \t]+(?=\*|`|['‘]|\[(?=[^\]]*\]))/g, '$1\n\n');
+  text = text.replace(/(`[^`\n]+`)[ \t]+(?=\*|"|['‘]|\[(?=[^\]]*\]))/g, '$1\n\n');
 
-  // 2. Dialogue ("...") followed by Action (*...*), Thought (`...`), Divider (---), or Status ([...])
-  text = text.replace(/("[^"\n]+")[ \t]*(?=\*|`|---|\[(?=[^\]]*\]))/g, '$1\n\n');
+  // 2. Ensure Scene Dividers (---, ***, ___) have double newlines before AND after
+  text = text.replace(/([^\n])[ \t\r]*([-*_]{3,})/g, '$1\n\n$2');
+  text = text.replace(/([-*_]{3,})[ \t\r]*([^\n])/g, '$1\n\n$2');
 
-  // 3. Thought (`...`) followed by Action (*...*), Dialogue ("..."), Divider (---), or Status ([...])
-  text = text.replace(/(`[^`\n]+`)[ \t]*(?=\*|"|---|\[(?=[^\]]*\]))/g, '$1\n\n');
+  // 3. Ensure Status Box [...] has double newlines before
+  text = text.replace(/([^\n])[ \t\r]*(\[\s*(?:🕒|🍂|📜|📍|Day|Time|Season|Year|Location|Status|HP|MP|Level|Rank)[^\]]*\])/gi, '$1\n\n$2');
 
-  // 4. Scene Divider (---) formatting
-  // Ensure double newlines before and after ---
-  text = text.replace(/([^\n])[ \t]*---/g, '$1\n\n---');
-  text = text.replace(/---[ \t]*([^\n])/g, '---\n\n$1');
+  // 4. Upgrade single newlines between separate non-empty lines (paragraphs/dialogues/actions) to double newlines
+  const lines = text.split('\n');
+  const resultLines = [];
+  let inCodeBlock = false;
 
-  // 5. Status Box [...] formatting
-  // If status box is attached directly to text without a double newline
-  text = text.replace(/([^\n])[ \t]*(\[\s*(?:🕒|🍂|📜|📍|Day|Time|Season|Year|Location|Status)[^\]]*\])/g, '$1\n\n$2');
+  for (let i = 0; i < lines.length; i++) {
+    const curr = lines[i];
+    const trimmed = curr.trim();
 
-  // Clean up excess newlines (more than 2 consecutive newlines)
-  text = text.replace(/\n{3,}/g, '\n\n');
+    if (/^`{3,}/.test(trimmed)) {
+      inCodeBlock = !inCodeBlock;
+      resultLines.push(curr);
+      continue;
+    }
 
-  return text;
+    if (inCodeBlock) {
+      resultLines.push(curr);
+      continue;
+    }
+
+    if (!trimmed) {
+      if (resultLines.length > 0 && resultLines[resultLines.length - 1] !== '') {
+        resultLines.push('');
+      }
+      continue;
+    }
+
+    // If previous line was non-empty, insert blank line
+    if (resultLines.length > 0 && resultLines[resultLines.length - 1] !== '') {
+      resultLines.push('');
+    }
+
+    resultLines.push(curr);
+  }
+
+  return resultLines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 // ========================================================================
