@@ -741,20 +741,88 @@ app.post('/v1/chat/summary', async (req, res) => {
       ],
       temperature: 0.3,
       max_tokens: 4096,
-      stream: false
+      stream: true
     };
 
     const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
-    const summaryText = response.data?.choices?.[0]?.message?.content || '';
 
-    if (summaryText) {
-      await saveChatSummary(summaryText);
-    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-    res.json({ summary: summaryText, model_used: usedModel });
+    const decoder = new StringDecoder('utf8');
+    let buffer = '';
+    let accumulatedSummary = '';
+
+    const upstreamStream = response.data;
+
+    upstreamStream.on('data', chunk => {
+      buffer += decoder.write(chunk);
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          if (line.includes('[DONE]')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            const deltaContent = data.choices?.[0]?.delta?.content || '';
+            if (deltaContent) {
+              accumulatedSummary += deltaContent;
+              res.write(`data: ${JSON.stringify({ content: deltaContent, model_used: usedModel })}\n\n`);
+            }
+          } catch (e) {}
+        }
+      }
+    });
+
+    upstreamStream.on('end', async () => {
+      buffer += decoder.end();
+      if (buffer.trim()) {
+        for (const line of buffer.split('\n')) {
+          if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const deltaContent = data.choices?.[0]?.delta?.content || '';
+              if (deltaContent) {
+                accumulatedSummary += deltaContent;
+                res.write(`data: ${JSON.stringify({ content: deltaContent, model_used: usedModel })}\n\n`);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      if (accumulatedSummary) {
+        try {
+          await saveChatSummary(accumulatedSummary);
+        } catch (err) {
+          console.warn('[SUMMARY] Failed to save summary to Redis:', err.message);
+        }
+      }
+
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+
+    upstreamStream.on('error', err => {
+      console.error('[SUMMARY] Stream error:', err.message);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      }
+    });
+
   } catch (err) {
     console.error('[SUMMARY] Failed to generate summary:', err.message);
-    res.status(500).json({ error: { message: err.message || 'Failed to generate summary', type: 'summary_error' } });
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: err.message || 'Failed to generate summary', type: 'summary_error' } });
+    } else if (!res.writableEnded) {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    }
   }
 });
 
@@ -775,9 +843,11 @@ app.post('/v1/chat/completions', async (req, res) => {
     if (Array.isArray(messages)) {
       const chatOnlyMessages = messages.filter(m => m && m.role !== 'system');
       if (chatOnlyMessages.length > 0) {
-        saveChatHistory(chatOnlyMessages).catch(err => {
+        try {
+          await saveChatHistory(chatOnlyMessages);
+        } catch (err) {
           console.warn('[PROXY] Failed to auto-save chat history:', err.message);
-        });
+        }
       }
     }
 

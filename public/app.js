@@ -164,6 +164,7 @@
     chatHistoryContainer: document.getElementById('chatHistoryContainer'),
     btnRefreshHistory: document.getElementById('btnRefreshHistory'),
     summaryResult: document.getElementById('summaryResult'),
+    summaryResultBox: document.getElementById('summaryResultBox'),
     summaryPrompt: document.getElementById('summaryPrompt'),
     summaryModel: document.getElementById('summaryModel'),
     btnGenerateSummary: document.getElementById('btnGenerateSummary'),
@@ -1770,7 +1771,7 @@
     el.btnGenerateSummary.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Summarizing...';
     if (window.lucide) window.lucide.createIcons();
 
-    el.summaryResult.textContent = 'Generating day-by-day summary... Please wait...';
+    el.summaryResult.textContent = '';
 
     try {
       const res = await fetch('/v1/chat/summary', {
@@ -1779,16 +1780,55 @@
         body: JSON.stringify({ prompt: promptText, model: modelText })
       });
 
-      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || `HTTP ${res.status}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP ${res.status}`);
       }
 
-      el.summaryResult.textContent = data.summary || 'No summary text returned.';
-      log(`Summary generated successfully using ${data.model_used || modelText}!`, 'info');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let usedModelName = modelText;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          if (trimmed.includes('[DONE]')) continue;
+
+          try {
+            const parsed = JSON.parse(trimmed.slice(6));
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            }
+            if (parsed.content) {
+              el.summaryResult.textContent += parsed.content;
+              if (el.summaryResultBox) {
+                el.summaryResultBox.scrollTop = el.summaryResultBox.scrollHeight;
+              }
+            }
+            if (parsed.model_used) {
+              usedModelName = parsed.model_used;
+            }
+          } catch (e) {
+            if (e.message && !e.message.includes('JSON')) throw e;
+          }
+        }
+      }
+
+      log(`Summary generated and streamed successfully using ${usedModelName}!`, 'info');
     } catch (err) {
       log(`Summary generation failed: ${err.message}`, 'error');
-      el.summaryResult.textContent = `Error: ${err.message}`;
+      if (!el.summaryResult.textContent) {
+        el.summaryResult.textContent = `Error: ${err.message}`;
+      }
     } finally {
       el.btnGenerateSummary.disabled = false;
       el.btnGenerateSummary.innerHTML = originalBtnText;

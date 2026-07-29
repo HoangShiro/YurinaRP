@@ -9,7 +9,7 @@ function getUpstashConfig() {
   return { url: url.replace(/\/$/, ''), token };
 }
 
-// Memory fallback if Redis is not configured or fails
+// Memory fallback for local testing
 let memoryChatHistory = [];
 let memoryChatSummary = '';
 
@@ -29,7 +29,20 @@ async function fetchChatHistory() {
     if (!res.ok) return memoryChatHistory;
     const data = await res.json();
     if (!data || data.result === null || data.result === undefined) return memoryChatHistory;
-    const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+    
+    let parsed = data.result;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch (e) {}
+    }
+    // Safeguard for double-stringified JSON payload if any legacy string exists
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch (e) {}
+    }
+
     return Array.isArray(parsed) ? parsed : memoryChatHistory;
   } catch (err) {
     console.warn('[UPSTASH-HISTORY] Failed to fetch chat history:', err.message);
@@ -55,8 +68,12 @@ async function saveChatHistory(messages) {
         Authorization: `Bearer ${config.token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: payload
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[UPSTASH-HISTORY] Upstash error status ${res.status}: ${errText}`);
+    }
     return res.ok;
   } catch (err) {
     console.warn('[UPSTASH-HISTORY] Failed to save chat history:', err.message);
