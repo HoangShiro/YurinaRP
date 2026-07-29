@@ -158,7 +158,16 @@
     modalTitle: document.getElementById('modalTitle'),
     jsonModalArea: document.getElementById('jsonModalArea'),
     btnCloseModal: document.getElementById('btnCloseModal'),
-    btnSubmitModalJson: document.getElementById('btnSubmitModalJson')
+    btnSubmitModalJson: document.getElementById('btnSubmitModalJson'),
+
+    // Chat History & Summary
+    chatHistoryContainer: document.getElementById('chatHistoryContainer'),
+    btnRefreshHistory: document.getElementById('btnRefreshHistory'),
+    summaryResult: document.getElementById('summaryResult'),
+    summaryPrompt: document.getElementById('summaryPrompt'),
+    summaryModel: document.getElementById('summaryModel'),
+    btnGenerateSummary: document.getElementById('btnGenerateSummary'),
+    btnCopySummary: document.getElementById('btnCopySummary')
   };
 
   // Helper Functions
@@ -198,9 +207,14 @@
         systemprompt: 'System Prompt & Prompt Rules Management',
         simulator: 'Context Simulation & Dry-Run Engine',
         worldstate: 'World State & Financial Ledger',
-        settings: 'Authentication & System Audit Log'
+        settings: 'Authentication & System Audit Log',
+        chathistory: 'Chat History & Conversation Summary'
       };
       el.pageTitle.textContent = titles[tabId] || 'Control Center';
+    }
+    if (tabId === 'chathistory') {
+      loadChatHistory();
+      loadChatSummary();
     }
     if (window.innerWidth <= 768 && el.sidebar) {
       el.sidebar.classList.remove('open');
@@ -1646,6 +1660,139 @@
         renderSystemPromptTree();
         selectSpItem(newId);
       });
+    }
+
+    if (el.btnRefreshHistory) {
+      el.btnRefreshHistory.addEventListener('click', () => {
+        loadChatHistory();
+      });
+    }
+
+    if (el.btnGenerateSummary) {
+      el.btnGenerateSummary.addEventListener('click', () => {
+        generateSummary();
+      });
+    }
+
+    if (el.btnCopySummary) {
+      el.btnCopySummary.addEventListener('click', () => {
+        if (!el.summaryResult) return;
+        const text = el.summaryResult.textContent;
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+          log('Copied summary output to clipboard!', 'info');
+        }).catch(err => {
+          log(`Failed to copy summary: ${err.message}`, 'error');
+        });
+      });
+    }
+  }
+
+  // --- CHAT HISTORY & SUMMARY LOGIC ---
+  async function loadChatHistory() {
+    if (!el.chatHistoryContainer) return;
+    try {
+      const res = await fetch('/v1/chat/history', { headers: getHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+
+      if (messages.length === 0) {
+        el.chatHistoryContainer.innerHTML = '<div class="chat-history-empty">No chat history recorded yet. Send a request to populate history.</div>';
+        return;
+      }
+
+      el.chatHistoryContainer.innerHTML = '';
+      messages.forEach((msg, idx) => {
+        const isUser = msg.role === 'user';
+        const roleClass = isUser ? 'chat-msg-user' : 'chat-msg-assistant';
+        const roleLabelClass = isUser ? 'chat-msg-role-user' : 'chat-msg-role-assistant';
+        const roleText = isUser ? 'User' : 'Assistant';
+        const contentText = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2);
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `chat-msg ${roleClass}`;
+        msgDiv.innerHTML = `
+          <div class="chat-msg-header">
+            <span class="chat-msg-role ${roleLabelClass}">${escapeHtml(roleText)}</span>
+            <button class="btn-icon btn-copy-msg" data-msg-idx="${idx}" title="Copy message text">
+              <i data-lucide="copy"></i>
+            </button>
+          </div>
+          <div class="chat-msg-body">${escapeHtml(contentText)}</div>
+        `;
+
+        const copyBtn = msgDiv.querySelector('.btn-copy-msg');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(contentText).then(() => {
+              log('Copied message text to clipboard!', 'info');
+            }).catch(err => {
+              log(`Failed to copy message: ${err.message}`, 'error');
+            });
+          });
+        }
+
+        el.chatHistoryContainer.appendChild(msgDiv);
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    } catch (err) {
+      log(`Failed to load chat history: ${err.message}`, 'error');
+      if (el.chatHistoryContainer) {
+        el.chatHistoryContainer.innerHTML = `<div class="chat-history-empty text-danger">Error loading history: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+  }
+
+  async function loadChatSummary() {
+    if (!el.summaryResult) return;
+    try {
+      const res = await fetch('/v1/chat/summary', { headers: getHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.summary) {
+        el.summaryResult.textContent = data.summary;
+      }
+    } catch (err) {
+      log(`Failed to load cached summary: ${err.message}`, 'warn');
+    }
+  }
+
+  async function generateSummary() {
+    if (!el.summaryResult || !el.btnGenerateSummary) return;
+
+    const promptText = el.summaryPrompt ? el.summaryPrompt.value.trim() : '';
+    const modelText = el.summaryModel ? el.summaryModel.value.trim() : 'z-ai/glm-5.2';
+
+    const originalBtnText = el.btnGenerateSummary.innerHTML;
+    el.btnGenerateSummary.disabled = true;
+    el.btnGenerateSummary.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Summarizing...';
+    if (window.lucide) window.lucide.createIcons();
+
+    el.summaryResult.textContent = 'Generating day-by-day summary... Please wait...';
+
+    try {
+      const res = await fetch('/v1/chat/summary', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ prompt: promptText, model: modelText })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || `HTTP ${res.status}`);
+      }
+
+      el.summaryResult.textContent = data.summary || 'No summary text returned.';
+      log(`Summary generated successfully using ${data.model_used || modelText}!`, 'info');
+    } catch (err) {
+      log(`Summary generation failed: ${err.message}`, 'error');
+      el.summaryResult.textContent = `Error: ${err.message}`;
+    } finally {
+      el.btnGenerateSummary.disabled = false;
+      el.btnGenerateSummary.innerHTML = originalBtnText;
+      if (window.lucide) window.lucide.createIcons();
     }
   }
 

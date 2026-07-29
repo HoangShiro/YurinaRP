@@ -17,6 +17,7 @@ const { compileLorebookStore, extractCurrentDay, isLorebookStoreActive, shouldIn
 const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/worldStateEngine');
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
+const { fetchChatHistory, saveChatHistory, fetchChatSummary, saveChatSummary } = require('./scripts/upstashChatHistory');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -692,6 +693,71 @@ app.post('/v1/worldstate/mutate', async (req, res) => {
   }
 });
 
+// ─── Chat History & Summary Endpoints ────────────────────────────────────────
+
+app.get('/v1/chat/history', async (req, res) => {
+  try {
+    const history = await fetchChatHistory();
+    res.json({ messages: history || [] });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'chat_history_error' } });
+  }
+});
+
+app.get('/v1/chat/summary', async (req, res) => {
+  try {
+    const summary = await fetchChatSummary();
+    res.json({ summary: summary || '' });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message, type: 'chat_summary_error' } });
+  }
+});
+
+app.post('/v1/chat/summary', async (req, res) => {
+  try {
+    const { prompt, model } = req.body;
+    const history = await fetchChatHistory();
+
+    if (!Array.isArray(history) || history.length === 0) {
+      return res.status(400).json({ error: { message: 'Chat history is empty. Please send some messages first.' } });
+    }
+
+    const formattedHistory = history.map(m => {
+      const roleName = m.role === 'user' ? 'User' : 'Assistant';
+      const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      return `[${roleName}]: ${text}`;
+    }).join('\n\n');
+
+    const summarySystemPrompt = prompt || `Please Generate a detailed summary using bullet points day by day from your chat history.`;
+
+    const cleanModel = typeof model === 'string' ? model.replace(/\[think\]/i, '').trim() : 'z-ai/glm-5.2';
+    const primaryModel = MODEL_MAPPING[cleanModel] || cleanModel;
+    const modelChain = primaryModel ? [primaryModel, ...FALLBACK_MODELS] : FALLBACK_MODELS;
+
+    const baseRequest = {
+      messages: [
+        { role: 'system', content: summarySystemPrompt },
+        { role: 'user', content: `Here is the chat history to summarize:\n\n${formattedHistory}` }
+      ],
+      temperature: 0.3,
+      max_tokens: 4096,
+      stream: false
+    };
+
+    const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
+    const summaryText = response.data?.choices?.[0]?.message?.content || '';
+
+    if (summaryText) {
+      await saveChatSummary(summaryText);
+    }
+
+    res.json({ summary: summaryText, model_used: usedModel });
+  } catch (err) {
+    console.error('[SUMMARY] Failed to generate summary:', err.message);
+    res.status(500).json({ error: { message: err.message || 'Failed to generate summary', type: 'summary_error' } });
+  }
+});
+
 app.post('/v1/chat/completions', async (req, res) => {
   let streamEndedCleanly = false;
   let upstreamStream = null;
@@ -704,6 +770,16 @@ app.post('/v1/chat/completions', async (req, res) => {
       max_tokens,
       stream
     } = req.body;
+
+    // Overwrite chat history with non-system messages from request
+    if (Array.isArray(messages)) {
+      const chatOnlyMessages = messages.filter(m => m && m.role !== 'system');
+      if (chatOnlyMessages.length > 0) {
+        saveChatHistory(chatOnlyMessages).catch(err => {
+          console.warn('[PROXY] Failed to auto-save chat history:', err.message);
+        });
+      }
+    }
 
     const hasThink = typeof model === 'string' && /\[think\]/i.test(model);
     const cleanModel = typeof model === 'string' ? model.replace(/\[think\]/i, '').trim() : model;
