@@ -205,7 +205,7 @@
     if (el.pageTitle) {
       const titles = {
         lorebooks: 'Lorebook Database Management',
-        systemprompt: 'System Prompt & Prompt Rules Management',
+        systemprompt: 'Prompt & Rules',
         simulator: 'Context Simulation & Dry-Run Engine',
         worldstate: 'World State & Financial Ledger',
         settings: 'Authentication & System Audit Log',
