@@ -719,7 +719,7 @@
           <div class="card-header flex-between">
             <div class="header-title-group">
               <h3><i data-lucide="cpu"></i> Model Configuration & Fallback Chain</h3>
-              <p class="card-subtitle">Cấu hình danh sách Model Fallback tự động khi API chính gặp lỗi (5xx, Timeout, 429)</p>
+              <p class="card-subtitle">Configure automatic model fallback chain when primary model encounters errors (5xx, Timeout, 429)</p>
             </div>
             <div class="header-actions">
               <button class="btn btn-secondary btn-sm" id="btnMcTestAll">
@@ -736,7 +736,7 @@
               <div class="toggle-control-group">
                 <label class="switch-label">
                   <span class="label-title">Enable Automatic Fallback Chain</span>
-                  <span class="label-desc">Tự động thử model tiếp theo trong danh sách khi model trước đó gặp sự cố</span>
+                  <span class="label-desc">Automatically try the next model in sequence if the preceding model fails</span>
                 </label>
                 <label class="switch">
                   <input type="checkbox" id="mcFallbackToggle">
@@ -747,7 +747,7 @@
 
             <!-- Fallback Models Chain List -->
             <div class="section-title-bar mt-4 mb-2">
-              <h4>Fallback Chain Priority (Thử theo thứ tự từ trên xuống dưới)</h4>
+              <h4>Fallback Chain Priority (Evaluated in top-to-bottom order)</h4>
             </div>
 
             <div id="mcModelList" class="model-chain-list">

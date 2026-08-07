@@ -1258,7 +1258,7 @@
     const models = state.modelConfig.fallback_models || [];
 
     if (models.length === 0) {
-      el.mcModelList.innerHTML = `<div class="empty-model-list">Chưa có model fallback nào. Vui lòng thêm model ở form bên dưới.</div>`;
+      el.mcModelList.innerHTML = `<div class="empty-model-list">No fallback models configured yet. Please add a model using the form below.</div>`;
       if (window.lucide) window.lucide.createIcons();
       return;
     }
@@ -1268,7 +1268,7 @@
       const isLast = idx === models.length - 1;
       const test = state.modelTestResults[m.id] || {};
 
-      let statusBadge = `<span class="model-status-badge status-untested"><i data-lucide="help-circle"></i> Chưa test</span>`;
+      let statusBadge = `<span class="model-status-badge status-untested"><i data-lucide="help-circle"></i> Untested</span>`;
       if (test.testing) {
         statusBadge = `<span class="model-status-badge status-testing"><i data-lucide="loader" class="spin"></i> Testing...</span>`;
       } else if (test.ok) {
@@ -1277,35 +1277,45 @@
         statusBadge = `<span class="model-status-badge status-offline" title="${escapeHtml(test.error)}"><i data-lucide="alert-triangle"></i> Offline</span>`;
       }
 
+      const errorBox = test.error ? `
+        <div class="model-error-detail">
+          <i data-lucide="alert-triangle"></i>
+          <span><strong>Error:</strong> ${escapeHtml(test.error)}</span>
+        </div>
+      ` : '';
+
       return `
-        <div class="model-card ${m.enabled ? '' : 'disabled'}" data-index="${idx}">
-          <div class="model-card-left">
-            <div class="model-index-badge">${idx + 1}</div>
-            <div class="model-card-info">
-              <div class="model-card-title">
-                <input type="checkbox" class="mc-toggle-item" data-index="${idx}" ${m.enabled ? 'checked' : ''}>
-                <span>${escapeHtml(m.label || m.id)}</span>
+        <div class="model-item-wrapper" data-index="${idx}">
+          <div class="model-card ${m.enabled ? '' : 'disabled'}">
+            <div class="model-card-left">
+              <div class="model-index-badge">${idx + 1}</div>
+              <div class="model-card-info">
+                <div class="model-card-title">
+                  <input type="checkbox" class="mc-toggle-item" data-index="${idx}" ${m.enabled ? 'checked' : ''}>
+                  <span>${escapeHtml(m.label || m.id)}</span>
+                </div>
+                <div class="model-card-id">${escapeHtml(m.id)}</div>
               </div>
-              <div class="model-card-id">${escapeHtml(m.id)}</div>
+            </div>
+            <div class="model-card-right">
+              ${statusBadge}
+              <div class="model-actions">
+                <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency">
+                  <i data-lucide="flask-conical"></i>
+                </button>
+                <button class="btn btn-secondary btn-xs btn-mc-up" data-index="${idx}" ${isFirst ? 'disabled' : ''} title="Move Up">
+                  <i data-lucide="arrow-up"></i>
+                </button>
+                <button class="btn btn-secondary btn-xs btn-mc-down" data-index="${idx}" ${isLast ? 'disabled' : ''} title="Move Down">
+                  <i data-lucide="arrow-down"></i>
+                </button>
+                <button class="btn btn-danger btn-xs btn-mc-del" data-index="${idx}" title="Delete model">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </div>
             </div>
           </div>
-          <div class="model-card-right">
-            ${statusBadge}
-            <div class="model-actions">
-              <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency">
-                <i data-lucide="flask-conical"></i>
-              </button>
-              <button class="btn btn-secondary btn-xs btn-mc-up" data-index="${idx}" ${isFirst ? 'disabled' : ''} title="Move Up">
-                <i data-lucide="arrow-up"></i>
-              </button>
-              <button class="btn btn-secondary btn-xs btn-mc-down" data-index="${idx}" ${isLast ? 'disabled' : ''} title="Move Down">
-                <i data-lucide="arrow-down"></i>
-              </button>
-              <button class="btn btn-danger btn-xs btn-mc-del" data-index="${idx}" title="Delete model">
-                <i data-lucide="trash-2"></i>
-              </button>
-            </div>
-          </div>
+          ${errorBox}
         </div>
       `;
     }).join('');
