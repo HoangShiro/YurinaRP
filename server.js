@@ -980,6 +980,77 @@ app.post('/v1/chat/completions', async (req, res) => {
       saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Auto-save recent_models error:', e.message));
     }
 
+    // 1. Fetch System Prompt Store & Tiered LorebookStore
+    const systemPromptStore = await fetchRemoteSystemPromptStore();
+    const lorebookStore = await fetchRemoteLorebookStore();
+
+    // Prepend base system prompt if configured
+    if (systemPromptStore && systemPromptStore.system_prompt && Array.isArray(messages) && messages.length > 0) {
+      if (messages[0].role === 'system') {
+        if (typeof messages[0].content === 'string' && !messages[0].content.includes(systemPromptStore.system_prompt)) {
+          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
+        }
+      } else {
+        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
+      }
+    }
+
+    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active
+    const loreActive = isLorebookStoreActive(lorebookStore);
+    const worldStateActive = shouldIncludeWorldState(lorebookStore);
+
+    if (loreActive) {
+      const compiledLore = compileLorebookStore(lorebookStore, messages);
+      const contextParts = [];
+
+      if (worldStateActive) {
+        const worldState = await processWorldStateTick(messages);
+        const worldSnapshot = compileWorldStateSnapshot(worldState);
+        if (worldSnapshot) contextParts.push(worldSnapshot);
+      }
+
+      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+        contextParts.push(compiledLore.compiledPrompt);
+      }
+      const combinedContext = contextParts.filter(Boolean).join('\n\n');
+
+      if (combinedContext && Array.isArray(messages) && messages.length > 0) {
+        if (messages[0].role === 'system') {
+          if (typeof messages[0].content === 'string') {
+            messages[0].content += '\n\n' + combinedContext;
+          }
+        } else {
+          messages.unshift({ role: 'system', content: combinedContext });
+        }
+      }
+
+      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            if (typeof messages[i].content === 'string') {
+              messages[i].content += '\n\n' + compiledLore.compiledPrompt;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    const {
+      messages: eventProcessedMessages,
+      fixFormat,
+      autoLineBreak,
+      triggeredPrompts
+    } = processEventTriggers(messages, systemPromptStore);
+
+    if (triggeredPrompts.length > 0) {
+      console.log(`[PROXY] Activated ${triggeredPrompts.length} event trigger prompt(s)`);
+    }
+    if (fixFormat) console.log('[PROXY] Feature: Fix format ENABLED');
+    if (autoLineBreak) console.log('[PROXY] Feature: Auto line break ENABLED');
+
+    const processedMessages = processOocPrompts(eventProcessedMessages);
+
     // Determine thinking extra_body based on cached capability or default
     const isGlobalThinkingEnabled = modelConfig.thinking_enabled !== false;
     let extraBody = undefined;
