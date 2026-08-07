@@ -55,6 +55,13 @@
           </div>
         </div>
 
+        <div class="rail-item nav-item" data-tab="modelconfig" data-tooltip="Model Config & Fallback">
+          <div class="rail-pill"></div>
+          <div class="rail-icon">
+            <i data-lucide="cpu"></i>
+          </div>
+        </div>
+
         <div class="rail-item nav-item" data-tab="settings" data-tooltip="Authentication & Logs">
           <div class="rail-pill"></div>
           <div class="rail-icon">
@@ -700,6 +707,70 @@
             <div class="card-body">
               <div class="log-console" id="logConsole">
                 <div class="log-entry info">[SYSTEM] Lorebook & State Manager Initialized.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB: MODEL CONFIG & FALLBACK -->
+      <section class="tab-page" id="page-modelconfig">
+        <div class="card glass full-width">
+          <div class="card-header flex-between">
+            <div class="header-title-group">
+              <h3><i data-lucide="cpu"></i> Model Configuration & Fallback Chain</h3>
+              <p class="card-subtitle">Cấu hình danh sách Model Fallback tự động khi API chính gặp lỗi (5xx, Timeout, 429)</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-secondary btn-sm" id="btnMcTestAll">
+                <i data-lucide="flask-conical"></i> Test All Models
+              </button>
+              <button class="btn btn-primary btn-sm" id="btnMcSave">
+                <i data-lucide="save"></i> Save Configuration
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Global Fallback Toggle -->
+            <div class="model-config-topbar card-subpanel">
+              <div class="toggle-control-group">
+                <label class="switch-label">
+                  <span class="label-title">Enable Automatic Fallback Chain</span>
+                  <span class="label-desc">Tự động thử model tiếp theo trong danh sách khi model trước đó gặp sự cố</span>
+                </label>
+                <label class="switch">
+                  <input type="checkbox" id="mcFallbackToggle">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Fallback Models Chain List -->
+            <div class="section-title-bar mt-4 mb-2">
+              <h4>Fallback Chain Priority (Thử theo thứ tự từ trên xuống dưới)</h4>
+            </div>
+
+            <div id="mcModelList" class="model-chain-list">
+              <!-- Rendered model cards go here -->
+            </div>
+
+            <!-- Add New Fallback Model Form -->
+            <div class="card-subpanel mt-4">
+              <h4><i data-lucide="plus-circle"></i> Add Model to Fallback Chain</h4>
+              <div class="form-grid-3 mt-2">
+                <div class="form-group">
+                  <label for="mcAddModelId">NVIDIA NIM Model ID</label>
+                  <input type="text" id="mcAddModelId" class="form-input" placeholder="e.g. z-ai/glm-5.2">
+                </div>
+                <div class="form-group">
+                  <label for="mcAddModelLabel">Label / Display Name</label>
+                  <input type="text" id="mcAddModelLabel" class="form-input" placeholder="e.g. GLM 5.2 (Fast)">
+                </div>
+                <div class="form-group flex-end">
+                  <button class="btn btn-accent w-full" id="btnMcAddModel">
+                    <i data-lucide="plus"></i> Add Model
+                  </button>
+                </div>
               </div>
             </div>
           </div>

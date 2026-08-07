@@ -15,7 +15,9 @@
     currentSubTab: 'definition',
     collapsedLbIds: new Set(JSON.parse(localStorage.getItem('yuri_collapsed_lbs') || '[]')),
     collapsedGroupKeys: new Set(JSON.parse(localStorage.getItem('yuri_collapsed_groups') || '[]')),
-    treeScrollTop: 0
+    treeScrollTop: 0,
+    modelConfig: { fallback_enabled: false, fallback_models: [] },
+    modelTestResults: {}
   };
 
   function saveCollapsedStates() {
@@ -58,6 +60,15 @@
     spBaseView: document.getElementById('spBaseView'),
     spFeaturesView: document.getElementById('spFeaturesView'),
     spRuleEditorView: document.getElementById('spRuleEditorView'),
+
+    // Model Config Elements
+    mcFallbackToggle: document.getElementById('mcFallbackToggle'),
+    mcModelList: document.getElementById('mcModelList'),
+    mcAddModelId: document.getElementById('mcAddModelId'),
+    mcAddModelLabel: document.getElementById('mcAddModelLabel'),
+    btnMcAddModel: document.getElementById('btnMcAddModel'),
+    btnMcSave: document.getElementById('btnMcSave'),
+    btnMcTestAll: document.getElementById('btnMcTestAll'),
     spEmptyView: document.getElementById('spEmptyView'),
 
     spBasePromptInput: document.getElementById('spBasePromptInput'),
@@ -209,7 +220,8 @@
         simulator: 'Context Simulation & Dry-Run Engine',
         worldstate: 'World State & Financial Ledger',
         settings: 'Authentication & System Audit Log',
-        chathistory: 'Chat History & Conversation Summary'
+        chathistory: 'Chat History & Conversation Summary',
+        modelconfig: 'Model Configuration & Fallback Chain'
       };
       el.pageTitle.textContent = titles[tabId] || 'Control Center';
     }
@@ -217,6 +229,10 @@
       loadChatHistory();
       loadChatSummary();
     }
+    if (tabId === 'modelconfig') {
+      loadModelConfig();
+    }
+
     if (window.innerWidth <= 768 && el.sidebar) {
       el.sidebar.classList.remove('open');
       if (el.sidebarBackdrop) el.sidebarBackdrop.classList.remove('show');
@@ -1187,6 +1203,169 @@
     return dict;
   }
 
+  // --- MODEL CONFIGURATION LOGIC ---
+  async function loadModelConfig() {
+    try {
+      const res = await fetch('/v1/model-config', { headers: getHeaders() });
+      const data = await res.json();
+      if (data.ok && data.config) {
+        state.modelConfig = data.config;
+        renderModelConfigUI();
+      }
+    } catch (err) {
+      log(`Failed to load model config: ${err.message}`, 'error');
+    }
+  }
+
+  async function saveModelConfig() {
+    try {
+      if (el.btnMcSave) {
+        el.btnMcSave.disabled = true;
+        el.btnMcSave.innerHTML = `<i data-lucide="loader" class="spin"></i> Saving...`;
+      }
+      const payload = {
+        fallback_enabled: state.modelConfig.fallback_enabled,
+        fallback_models: state.modelConfig.fallback_models
+      };
+      const res = await fetch('/v1/model-config', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.ok) {
+        log('Model configuration saved to Upstash Redis successfully!', 'info');
+      } else {
+        log(`Failed to save model config: ${data.error || 'Unknown error'}`, 'error');
+      }
+    } catch (err) {
+      log(`Save model config error: ${err.message}`, 'error');
+    } finally {
+      if (el.btnMcSave) {
+        el.btnMcSave.disabled = false;
+        el.btnMcSave.innerHTML = `<i data-lucide="save"></i> Save Configuration`;
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+  }
+
+  function renderModelConfigUI() {
+    if (el.mcFallbackToggle) {
+      el.mcFallbackToggle.checked = !!state.modelConfig.fallback_enabled;
+    }
+
+    if (!el.mcModelList) return;
+    const models = state.modelConfig.fallback_models || [];
+
+    if (models.length === 0) {
+      el.mcModelList.innerHTML = `<div class="empty-model-list">Chưa có model fallback nào. Vui lòng thêm model ở form bên dưới.</div>`;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    el.mcModelList.innerHTML = models.map((m, idx) => {
+      const isFirst = idx === 0;
+      const isLast = idx === models.length - 1;
+      const test = state.modelTestResults[m.id] || {};
+
+      let statusBadge = `<span class="model-status-badge status-untested"><i data-lucide="help-circle"></i> Chưa test</span>`;
+      if (test.testing) {
+        statusBadge = `<span class="model-status-badge status-testing"><i data-lucide="loader" class="spin"></i> Testing...</span>`;
+      } else if (test.ok) {
+        statusBadge = `<span class="model-status-badge status-online"><i data-lucide="check-circle-2"></i> ${test.latency_ms}ms</span>`;
+      } else if (test.error) {
+        statusBadge = `<span class="model-status-badge status-offline" title="${escapeHtml(test.error)}"><i data-lucide="alert-triangle"></i> Offline</span>`;
+      }
+
+      return `
+        <div class="model-card ${m.enabled ? '' : 'disabled'}" data-index="${idx}">
+          <div class="model-card-left">
+            <div class="model-index-badge">${idx + 1}</div>
+            <div class="model-card-info">
+              <div class="model-card-title">
+                <input type="checkbox" class="mc-toggle-item" data-index="${idx}" ${m.enabled ? 'checked' : ''}>
+                <span>${escapeHtml(m.label || m.id)}</span>
+              </div>
+              <div class="model-card-id">${escapeHtml(m.id)}</div>
+            </div>
+          </div>
+          <div class="model-card-right">
+            ${statusBadge}
+            <div class="model-actions">
+              <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency">
+                <i data-lucide="flask-conical"></i>
+              </button>
+              <button class="btn btn-secondary btn-xs btn-mc-up" data-index="${idx}" ${isFirst ? 'disabled' : ''} title="Move Up">
+                <i data-lucide="arrow-up"></i>
+              </button>
+              <button class="btn btn-secondary btn-xs btn-mc-down" data-index="${idx}" ${isLast ? 'disabled' : ''} title="Move Down">
+                <i data-lucide="arrow-down"></i>
+              </button>
+              <button class="btn btn-danger btn-xs btn-mc-del" data-index="${idx}" title="Delete model">
+                <i data-lucide="trash-2"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  async function testSingleModel(modelId) {
+    state.modelTestResults[modelId] = { testing: true };
+    renderModelConfigUI();
+    try {
+      const res = await fetch('/v1/model-test', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ model_id: modelId })
+      });
+      const data = await res.json();
+      state.modelTestResults[modelId] = {
+        testing: false,
+        ok: data.ok,
+        latency_ms: data.latency_ms,
+        error: data.error
+      };
+      if (data.ok) {
+        log(`Model ${modelId} is online! Latency: ${data.latency_ms}ms`, 'info');
+      } else {
+        log(`Model ${modelId} test failed: ${data.error}`, 'error');
+      }
+    } catch (err) {
+      state.modelTestResults[modelId] = {
+        testing: false,
+        ok: false,
+        error: err.message
+      };
+      log(`Model test request error: ${err.message}`, 'error');
+    } finally {
+      renderModelConfigUI();
+    }
+  }
+
+  async function testAllModels() {
+    const models = state.modelConfig.fallback_models || [];
+    if (models.length === 0) return;
+
+    if (el.btnMcTestAll) {
+      el.btnMcTestAll.disabled = true;
+      el.btnMcTestAll.innerHTML = `<i data-lucide="loader" class="spin"></i> Testing All...`;
+    }
+
+    for (const m of models) {
+      await testSingleModel(m.id);
+    }
+
+    if (el.btnMcTestAll) {
+      el.btnMcTestAll.disabled = false;
+      el.btnMcTestAll.innerHTML = `<i data-lucide="flask-conical"></i> Test All Models`;
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
   // --- EVENT LISTENERS ---
   function bindEvents() {
     // Navigation
@@ -1228,6 +1407,106 @@
     el.btnExportDb.addEventListener('click', () => {
       window.location.href = '/v1/lorebooks/export';
     });
+
+    // Model Config Events
+    if (el.mcFallbackToggle) {
+      el.mcFallbackToggle.addEventListener('change', (e) => {
+        state.modelConfig.fallback_enabled = e.target.checked;
+      });
+    }
+
+    if (el.btnMcSave) {
+      el.btnMcSave.addEventListener('click', saveModelConfig);
+    }
+
+    if (el.btnMcTestAll) {
+      el.btnMcTestAll.addEventListener('click', testAllModels);
+    }
+
+    if (el.btnMcAddModel) {
+      el.btnMcAddModel.addEventListener('click', () => {
+        const id = (el.mcAddModelId.value || '').trim();
+        const label = (el.mcAddModelLabel.value || '').trim();
+        if (!id) {
+          log('Please enter a valid Model ID', 'error');
+          return;
+        }
+        if (!Array.isArray(state.modelConfig.fallback_models)) {
+          state.modelConfig.fallback_models = [];
+        }
+        if (state.modelConfig.fallback_models.some(m => m.id === id)) {
+          log(`Model ${id} is already in the fallback chain`, 'error');
+          return;
+        }
+        state.modelConfig.fallback_models.push({
+          id,
+          label: label || id,
+          enabled: true
+        });
+        el.mcAddModelId.value = '';
+        el.mcAddModelLabel.value = '';
+        renderModelConfigUI();
+        log(`Added model ${id} to fallback chain. Click "Save Configuration" to commit.`, 'info');
+      });
+    }
+
+    if (el.mcModelList) {
+      el.mcModelList.addEventListener('click', (e) => {
+        const btnTest = e.target.closest('.btn-mc-test');
+        if (btnTest) {
+          const modelId = btnTest.dataset.id;
+          testSingleModel(modelId);
+          return;
+        }
+
+        const btnUp = e.target.closest('.btn-mc-up');
+        if (btnUp) {
+          const idx = parseInt(btnUp.dataset.index, 10);
+          if (idx > 0) {
+            const list = state.modelConfig.fallback_models;
+            const temp = list[idx];
+            list[idx] = list[idx - 1];
+            list[idx - 1] = temp;
+            renderModelConfigUI();
+          }
+          return;
+        }
+
+        const btnDown = e.target.closest('.btn-mc-down');
+        if (btnDown) {
+          const idx = parseInt(btnDown.dataset.index, 10);
+          const list = state.modelConfig.fallback_models;
+          if (idx < list.length - 1) {
+            const temp = list[idx];
+            list[idx] = list[idx + 1];
+            list[idx + 1] = temp;
+            renderModelConfigUI();
+          }
+          return;
+        }
+
+        const btnDel = e.target.closest('.btn-mc-del');
+        if (btnDel) {
+          const idx = parseInt(btnDel.dataset.index, 10);
+          const list = state.modelConfig.fallback_models;
+          const removed = list.splice(idx, 1);
+          renderModelConfigUI();
+          log(`Removed model ${removed[0]?.id || ''}`, 'info');
+          return;
+        }
+      });
+
+      el.mcModelList.addEventListener('change', (e) => {
+        if (e.target.classList.contains('mc-toggle-item')) {
+          const idx = parseInt(e.target.dataset.index, 10);
+          if (state.modelConfig.fallback_models[idx]) {
+            state.modelConfig.fallback_models[idx].enabled = e.target.checked;
+            renderModelConfigUI();
+          }
+        }
+      });
+    }
+
 
     el.btnImportDb.addEventListener('click', () => {
       el.modalTitle.textContent = 'Import JSON Database';
@@ -1843,8 +2122,10 @@
     if (isAuth) {
       loadLorebookStore();
       loadSystemPromptStore();
+      loadModelConfig();
       selectSpItem('sp_base');
     }
+
   }
 
   document.addEventListener('DOMContentLoaded', init);

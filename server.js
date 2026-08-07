@@ -18,6 +18,7 @@ const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
 const { fetchChatHistory, saveChatHistory, fetchChatSummary, saveChatSummary } = require('./scripts/upstashChatHistory');
+const { fetchRemoteModelConfigStore, saveRemoteModelConfigStore, getDefaultModelConfig } = require('./scripts/upstashModelConfig');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -89,13 +90,28 @@ const MODEL_MAPPING = {
   'glm-5.2': 'z-ai/glm-5.2'
 };
 
-const FALLBACK_MODELS = [
-  'z-ai/glm-5.2',
-  'z-ai/glm-5.2',
-  'minimaxai/minimax-m3',
-  'minimaxai/minimax-m2.7',
-  'nvidia/nemotron-3-ultra-550b-a55b'
-];
+// Dynamic Model Configuration stored in Upstash Redis
+let modelConfig = getDefaultModelConfig();
+
+async function initModelConfig() {
+  try {
+    modelConfig = await fetchRemoteModelConfigStore();
+    console.log(`[CONFIG] Model config loaded from Upstash Redis (fallback_enabled: ${modelConfig.fallback_enabled}, count: ${modelConfig.fallback_models?.length || 0})`);
+  } catch (err) {
+    console.warn('[CONFIG] Failed to load model config on startup:', err.message);
+  }
+}
+initModelConfig();
+
+function getActiveModelChain(primaryModel) {
+  const fallbacks = (modelConfig.fallback_enabled && Array.isArray(modelConfig.fallback_models))
+    ? modelConfig.fallback_models.filter(m => m.enabled).map(m => m.id)
+    : [];
+  
+  if (!primaryModel) return fallbacks;
+  return [primaryModel, ...fallbacks.filter(id => id !== primaryModel)];
+}
+
 
 // ─── Auth Helpers ────────────────────────────────────────────────────────────
 
@@ -594,6 +610,62 @@ app.get('/v1/system-prompt/export', async (req, res) => {
   }
 });
 
+// ─── Model Configuration Routes ─────────────────────────────────────────────
+
+app.get('/v1/model-config', async (req, res) => {
+  try {
+    const config = await fetchRemoteModelConfigStore();
+    modelConfig = config;
+    res.json({ ok: true, config });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/v1/model-config', async (req, res) => {
+  try {
+    const newConfig = req.body;
+    if (typeof newConfig.fallback_enabled !== 'boolean' || !Array.isArray(newConfig.fallback_models)) {
+      return res.status(400).json({ ok: false, error: 'Invalid model_config format. Expected fallback_enabled (boolean) and fallback_models (array).' });
+    }
+    await saveRemoteModelConfigStore(newConfig);
+    modelConfig = newConfig;
+    console.log('[CONFIG] Updated model config saved to Upstash Redis');
+    res.json({ ok: true, message: 'Model configuration updated successfully', config: modelConfig });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/v1/model-test', async (req, res) => {
+  const { model_id } = req.body;
+  if (!model_id || typeof model_id !== 'string') {
+    return res.status(400).json({ ok: false, error: 'model_id is required' });
+  }
+  
+  const start = Date.now();
+  try {
+    const response = await axios.post(`${NIM_API_BASE}/chat/completions`, {
+      model: model_id,
+      messages: [{ role: 'user', content: 'Hi' }],
+      max_tokens: 5,
+      stream: false
+    }, {
+      headers: {
+        Authorization: `Bearer ${NIM_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+    const latency_ms = Date.now() - start;
+    return res.json({ ok: true, latency_ms, model: model_id });
+  } catch (err) {
+    const latency_ms = Date.now() - start;
+    const errorMsg = err.response?.data?.error?.message || err.response?.data?.detail || err.message;
+    return res.json({ ok: false, latency_ms, model: model_id, error: errorMsg });
+  }
+});
+
 // Legacy backward compatibility route
 app.get('/v1/lorebook', async (req, res) => {
   try {
@@ -732,7 +804,7 @@ app.post('/v1/chat/summary', async (req, res) => {
 
     const cleanModel = typeof model === 'string' ? model.replace(/\[think\]/i, '').trim() : 'z-ai/glm-5.2';
     const primaryModel = MODEL_MAPPING[cleanModel] || cleanModel;
-    const modelChain = primaryModel ? [primaryModel, ...FALLBACK_MODELS] : FALLBACK_MODELS;
+    const modelChain = getActiveModelChain(primaryModel);
 
     const baseRequest = {
       messages: [
@@ -855,7 +927,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const cleanModel = typeof model === 'string' ? model.replace(/\[think\]/i, '').trim() : model;
 
     const primaryModel = MODEL_MAPPING[cleanModel] || cleanModel;
-    const modelChain = primaryModel ? [primaryModel, ...FALLBACK_MODELS] : FALLBACK_MODELS;
+    const modelChain = getActiveModelChain(primaryModel);
 
     const requestEnableThinking = ENABLE_THINKING_MODE || hasThink;
     const requestShowReasoning = SHOW_REASONING || hasThink;
