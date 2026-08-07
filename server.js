@@ -1244,16 +1244,19 @@ app.post('/v1/chat/completions', async (req, res) => {
             let content = delta.content || '';
             const reasoning = delta.reasoning_content;
 
+            const startTag = modelConfig.thinking_start_tag || '<think>';
+            const endTag = modelConfig.thinking_end_tag || '</think>';
+
             if (requestShowReasoning) {
               if (reasoning && !reasoningOpen) {
-                content = `<thinking>\n${reasoning.replace(/\n/g, '\\n')}`;
+                content = `${startTag}\n${reasoning.replace(/\n/g, '\\n')}`;
                 reasoningOpen = true;
               } else if (reasoning) {
                 content = reasoning.replace(/\n/g, '\\n');
               }
 
               if (delta.content && reasoningOpen) {
-                content += `\n</thinking>\n\n${delta.content}`;
+                content += `\n${endTag}\n\n${delta.content}`;
                 reasoningOpen = false;
               }
             }
@@ -1382,6 +1385,9 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     } else {
       // Non-streaming response
+      const startTag = modelConfig.thinking_start_tag || '<think>';
+      const endTag = modelConfig.thinking_end_tag || '</think>';
+
       const openaiResponse = {
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
@@ -1392,7 +1398,7 @@ app.post('/v1/chat/completions', async (req, res) => {
 
           if (requestShowReasoning && choice.message?.reasoning_content) {
             const safeReasoning = choice.message.reasoning_content.replace(/\n/g, '\\n');
-            content = `<thinking>\n${safeReasoning}\n</thinking>\n\n${content}`;
+            content = `${startTag}\n${safeReasoning}\n${endTag}\n\n${content}`;
           }
 
           if (autoLineBreak) {

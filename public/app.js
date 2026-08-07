@@ -63,6 +63,8 @@
 
     // Model Config Elements
     mcFallbackToggle: document.getElementById('mcFallbackToggle'),
+    mcThinkingStartTag: document.getElementById('mcThinkingStartTag'),
+    mcThinkingEndTag: document.getElementById('mcThinkingEndTag'),
     mcModelRegistry: document.getElementById('mcModelRegistry'),
     mcModelList: document.getElementById('mcModelList'),
     mcAddModelId: document.getElementById('mcAddModelId'),
@@ -1227,7 +1229,9 @@
       const payload = {
         fallback_enabled: state.modelConfig.fallback_enabled,
         fallback_models: state.modelConfig.fallback_models,
-        model_registry: state.modelConfig.model_registry || []
+        model_registry: state.modelConfig.model_registry || [],
+        thinking_start_tag: state.modelConfig.thinking_start_tag || '<think>',
+        thinking_end_tag: state.modelConfig.thinking_end_tag || '</think>'
       };
       const res = await fetch('/v1/model-config', {
         method: 'POST',
@@ -1323,6 +1327,12 @@
   function renderModelConfigUI() {
     if (el.mcFallbackToggle) {
       el.mcFallbackToggle.checked = !!state.modelConfig.fallback_enabled;
+    }
+    if (el.mcThinkingStartTag) {
+      el.mcThinkingStartTag.value = state.modelConfig.thinking_start_tag || '<think>';
+    }
+    if (el.mcThinkingEndTag) {
+      el.mcThinkingEndTag.value = state.modelConfig.thinking_end_tag || '</think>';
     }
 
     renderModelRegistryUI();
@@ -1497,6 +1507,19 @@
         state.modelConfig.fallback_enabled = e.target.checked;
       });
     }
+
+    if (el.mcThinkingStartTag) {
+      el.mcThinkingStartTag.addEventListener('input', (e) => {
+        state.modelConfig.thinking_start_tag = e.target.value;
+      });
+    }
+
+    if (el.mcThinkingEndTag) {
+      el.mcThinkingEndTag.addEventListener('input', (e) => {
+        state.modelConfig.thinking_end_tag = e.target.value;
+      });
+    }
+
 
     if (el.btnMcSave) {
       el.btnMcSave.addEventListener('click', saveModelConfig);

@@ -13,7 +13,9 @@ function getDefaultModelConfig() {
   return {
     fallback_enabled: false,
     fallback_models: [],
-    model_registry: []
+    model_registry: [],
+    thinking_start_tag: '<think>',
+    thinking_end_tag: '</think>'
   };
 }
 
@@ -34,6 +36,8 @@ async function fetchRemoteModelConfigStore() {
     if (store && typeof store === 'object') {
       if (!Array.isArray(store.fallback_models)) store.fallback_models = [];
       if (!Array.isArray(store.model_registry)) store.model_registry = [];
+      if (!store.thinking_start_tag) store.thinking_start_tag = '<think>';
+      if (!store.thinking_end_tag) store.thinking_end_tag = '</think>';
       return store;
     }
     return getDefaultModelConfig();
