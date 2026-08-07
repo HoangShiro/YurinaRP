@@ -96,7 +96,7 @@ let modelConfig = getDefaultModelConfig();
 async function initModelConfig() {
   try {
     modelConfig = await fetchRemoteModelConfigStore();
-    console.log(`[CONFIG] Model config loaded from Upstash Redis (fallback_enabled: ${modelConfig.fallback_enabled}, count: ${modelConfig.fallback_models?.length || 0})`);
+    console.log(`[CONFIG] Model config loaded from Upstash Redis (fallback_enabled: ${modelConfig.fallback_enabled}, registry_count: ${modelConfig.model_registry?.length || 0})`);
   } catch (err) {
     console.warn('[CONFIG] Failed to load model config on startup:', err.message);
   }
@@ -113,73 +113,87 @@ function getActiveModelChain(primaryModel) {
 }
 
 function getModelRegistryEntry(modelId) {
-  if (!Array.isArray(modelConfig.model_registry)) modelConfig.model_registry = [];
+  if (!Array.isArray(modelConfig.model_registry)) {
+    modelConfig.model_registry = [];
+  }
   return modelConfig.model_registry.find(m => m.id === modelId) || null;
 }
 
-function updateThinkingCapability(modelId, capable, extraBodyUsed) {
-  if (!Array.isArray(modelConfig.model_registry)) modelConfig.model_registry = [];
-  const registry = modelConfig.model_registry;
-  const type = capable
-    ? (extraBodyUsed?.chat_template_kwargs?.thinking_mode ? 'minimax' : 'standard')
-    : 'none';
+function updateThinkingCapability(modelId, capable, extraBody) {
+  if (!Array.isArray(modelConfig.model_registry)) {
+    modelConfig.model_registry = [];
+  }
+  let entry = modelConfig.model_registry.find(m => m.id === modelId);
+  const now = new Date().toISOString();
 
-  let entry = registry.find(m => m.id === modelId);
   if (!entry) {
     entry = {
       id: modelId,
-      label: modelId.split('/').pop(),
-      last_used: new Date().toISOString(),
+      label: modelId.includes('/') ? modelId.split('/').pop() : modelId,
+      last_used: now,
       thinking_capable: capable,
-      thinking_type: type,
+      thinking_type: capable ? (extraBody?.chat_template_kwargs?.thinking_mode ? 'minimax' : 'standard') : 'none',
       thinking_enabled: capable
     };
-    registry.unshift(entry);
-    if (registry.length > 10) registry.splice(10);
+    modelConfig.model_registry.unshift(entry);
+    if (modelConfig.model_registry.length > 10) {
+      modelConfig.model_registry.splice(10);
+    }
   } else {
-    entry.thinking_capable = capable;
-    entry.thinking_type = type;
-    if (!capable) {
+    entry.last_used = now;
+    if (capable) {
+      const wasUnknownOrNone = !entry.thinking_capable;
+      entry.thinking_capable = true;
+      entry.thinking_type = extraBody?.chat_template_kwargs?.thinking_mode ? 'minimax' : 'standard';
+      if (wasUnknownOrNone) {
+        entry.thinking_enabled = true;
+      }
+    } else {
+      entry.thinking_capable = false;
+      entry.thinking_type = 'none';
       entry.thinking_enabled = false;
     }
   }
 
   saveRemoteModelConfigStore(modelConfig).catch(err => {
-    console.warn('[REGISTRY] Failed to save updated thinking capability:', err.message);
+    console.warn('[REGISTRY] Failed to auto-persist registry update:', err.message);
   });
 }
 
 function registerModelUsage(modelId) {
-  if (!Array.isArray(modelConfig.model_registry)) modelConfig.model_registry = [];
-  const registry = modelConfig.model_registry;
+  if (!Array.isArray(modelConfig.model_registry)) {
+    modelConfig.model_registry = [];
+  }
   const now = new Date().toISOString();
-  
-  const existingIdx = registry.findIndex(m => m.id === modelId);
-  if (existingIdx !== -1) {
-    const existing = registry[existingIdx];
-    existing.last_used = now;
-    if (existingIdx > 0) {
-      registry.splice(existingIdx, 1);
-      registry.unshift(existing);
-    }
-  } else {
-    const entry = {
+  let entry = modelConfig.model_registry.find(m => m.id === modelId);
+
+  if (!entry) {
+    entry = {
       id: modelId,
-      label: modelId.split('/').pop(),
+      label: modelId.includes('/') ? modelId.split('/').pop() : modelId,
       last_used: now,
       thinking_capable: false,
       thinking_type: 'unknown',
       thinking_enabled: false
     };
-    registry.unshift(entry);
-    if (registry.length > 10) registry.splice(10);
+    modelConfig.model_registry.unshift(entry);
+    if (modelConfig.model_registry.length > 10) {
+      modelConfig.model_registry.splice(10);
+    }
+  } else {
+    entry.last_used = now;
+    const idx = modelConfig.model_registry.indexOf(entry);
+    if (idx > 0) {
+      modelConfig.model_registry.splice(idx, 1);
+      modelConfig.model_registry.unshift(entry);
+    }
   }
 
   saveRemoteModelConfigStore(modelConfig).catch(err => {
-    console.warn('[REGISTRY] Failed to auto-save model usage:', err.message);
+    console.warn('[REGISTRY] Failed to auto-persist model usage:', err.message);
   });
+  return entry;
 }
-
 
 
 // ─── Auth Helpers ────────────────────────────────────────────────────────────
@@ -382,18 +396,16 @@ async function callWithFallback(baseRequest, models) {
       if (baseRequest.extra_body) {
         updateThinkingCapability(model, true, baseRequest.extra_body);
       }
-      registerModelUsage(model);
       return { response: res, model };
 
     } catch (err) {
       if (baseRequest.extra_body && err.response?.status === 400) {
         console.warn(`[FALLBACK] Model ${model} failed with 400 and extra_body, retrying without thinking mode...`);
+        updateThinkingCapability(model, false, null);
         try {
           const cleanRequest = { ...baseRequest };
           delete cleanRequest.extra_body;
           const res = await makeRequest(cleanRequest, model);
-          updateThinkingCapability(model, false, null);
-          registerModelUsage(model);
           return { response: res, model };
         } catch (retryErr) {
           lastError = retryErr;
@@ -413,6 +425,7 @@ async function callWithFallback(baseRequest, models) {
       }
     }
   }
+
 
   throw lastError || new Error('All models failed');
 }
@@ -1003,29 +1016,107 @@ app.post('/v1/chat/completions', async (req, res) => {
     const primaryModel = MODEL_MAPPING[cleanModel] || cleanModel;
     const modelChain = getActiveModelChain(primaryModel);
 
-    // Smart Thinking Capability Lookup
-    const registryEntry = getModelRegistryEntry(primaryModel);
+    // 1. Fetch System Prompt Store & Tiered LorebookStore
+    const systemPromptStore = await fetchRemoteSystemPromptStore();
+    const lorebookStore = await fetchRemoteLorebookStore();
+
+    // Prepend base system prompt if configured
+    if (systemPromptStore && systemPromptStore.system_prompt && Array.isArray(messages) && messages.length > 0) {
+      if (messages[0].role === 'system') {
+        if (typeof messages[0].content === 'string' && !messages[0].content.includes(systemPromptStore.system_prompt)) {
+          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
+        }
+      } else {
+        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
+      }
+    }
+
+    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active
+    const loreActive = isLorebookStoreActive(lorebookStore);
+    const worldStateActive = shouldIncludeWorldState(lorebookStore);
+
+    if (loreActive) {
+      const compiledLore = compileLorebookStore(lorebookStore, messages);
+      const contextParts = [];
+
+      if (worldStateActive) {
+        const worldState = await processWorldStateTick(messages);
+        const worldSnapshot = compileWorldStateSnapshot(worldState);
+        if (worldSnapshot) contextParts.push(worldSnapshot);
+      }
+
+      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
+        contextParts.push(compiledLore.compiledPrompt);
+      }
+      const combinedContext = contextParts.filter(Boolean).join('\n\n');
+
+      if (combinedContext && Array.isArray(messages) && messages.length > 0) {
+        if (messages[0].role === 'system') {
+          if (typeof messages[0].content === 'string') {
+            messages[0].content += '\n\n' + combinedContext;
+          }
+        } else {
+          messages.unshift({ role: 'system', content: combinedContext });
+        }
+      }
+
+      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            if (typeof messages[i].content === 'string') {
+              messages[i].content += '\n\n' + compiledLore.compiledPrompt;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    const {
+      messages: eventProcessedMessages,
+      fixFormat,
+      autoLineBreak,
+      triggeredPrompts
+    } = processEventTriggers(messages, systemPromptStore);
+
+    if (triggeredPrompts.length > 0) {
+      console.log(`[PROXY] Activated ${triggeredPrompts.length} event trigger prompt(s)`);
+    }
+    if (fixFormat) console.log('[PROXY] Feature: Fix format ENABLED');
+    if (autoLineBreak) console.log('[PROXY] Feature: Auto line break ENABLED');
+
+    const processedMessages = processOocPrompts(eventProcessedMessages);
+
+    // 3. Smart Thinking Mode & Model Registry Auto-Tracking
+    const registryEntry = registerModelUsage(primaryModel);
+
     let requestEnableThinking = false;
+    let requestShowReasoning = false;
     let thinkingKwargs = null;
 
     if (registryEntry) {
-      if (registryEntry.thinking_capable && registryEntry.thinking_enabled) {
+      if (registryEntry.thinking_enabled) {
         requestEnableThinking = true;
+        requestShowReasoning = true;
         if (registryEntry.thinking_type === 'minimax') {
           thinkingKwargs = { thinking_mode: 'enabled' };
-        } else {
+        } else if (registryEntry.thinking_type === 'standard') {
           thinkingKwargs = { thinking: true };
+        } else {
+          const isMinimax = primaryModel.toLowerCase().includes('minimax');
+          thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
         }
       } else if (registryEntry.thinking_type === 'unknown') {
-        // Auto-detect phase for first-time model call
+        // Auto-detect on first call
         requestEnableThinking = true;
-        const isMinimax = (typeof primaryModel === 'string' && primaryModel.toLowerCase().includes('minimax'));
+        requestShowReasoning = true;
+        const isMinimax = primaryModel.toLowerCase().includes('minimax');
         thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
       }
     } else {
-      // First-time model call — auto-detect phase
       requestEnableThinking = true;
-      const isMinimax = (typeof primaryModel === 'string' && primaryModel.toLowerCase().includes('minimax'));
+      requestShowReasoning = true;
+      const isMinimax = (typeof cleanModel === 'string' && cleanModel.toLowerCase().includes('minimax'));
       thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
     }
 
@@ -1034,10 +1125,11 @@ app.post('/v1/chat/completions', async (req, res) => {
       temperature: temperature ?? 0.7,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
       stream: stream || false,
-      extra_body: requestEnableThinking && thinkingKwargs
+      extra_body: (requestEnableThinking && thinkingKwargs)
         ? { chat_template_kwargs: thinkingKwargs }
         : undefined
     };
+
 
     const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
     upstreamStream = response.data;
