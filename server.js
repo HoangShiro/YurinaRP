@@ -119,7 +119,7 @@ function getModelRegistryEntry(modelId) {
   return modelConfig.model_registry.find(m => m.id === modelId) || null;
 }
 
-function updateThinkingCapability(modelId, capable, extraBody) {
+function updateThinkingCapability(modelId, capable, reqBody) {
   if (!Array.isArray(modelConfig.model_registry)) {
     modelConfig.model_registry = [];
   }
@@ -127,11 +127,11 @@ function updateThinkingCapability(modelId, capable, extraBody) {
   const now = new Date().toISOString();
 
   let thinkingType = 'none';
-  if (capable) {
-    if (extraBody?.chat_template_kwargs?.thinking_mode) {
-      thinkingType = 'minimax';
-    } else if (extraBody?.chat_template_kwargs?.reasoning_effort) {
+  if (capable && reqBody) {
+    if (reqBody.reasoning_effort || reqBody.extra_body?.chat_template_kwargs?.reasoning_effort) {
       thinkingType = 'nemotron';
+    } else if (reqBody.extra_body?.chat_template_kwargs?.thinking_mode) {
+      thinkingType = 'minimax';
     } else {
       thinkingType = 'standard';
     }
@@ -381,6 +381,18 @@ function safeWrite(res, data) {
 
 // ─── Helper: Fallback Chain ─────────────────────────────────────────────────
 
+function hasThinkingParams(reqBody) {
+  return !!(reqBody.extra_body || reqBody.reasoning_effort || reqBody.reasoning_budget);
+}
+
+function removeThinkingParams(reqBody) {
+  const clean = { ...reqBody };
+  delete clean.extra_body;
+  delete clean.reasoning_effort;
+  delete clean.reasoning_budget;
+  return clean;
+}
+
 async function callWithFallback(baseRequest, models) {
   let lastError = null;
 
@@ -404,18 +416,17 @@ async function callWithFallback(baseRequest, models) {
   for (const model of models) {
     try {
       const res = await makeRequest(baseRequest, model);
-      if (baseRequest.extra_body) {
-        updateThinkingCapability(model, true, baseRequest.extra_body);
+      if (hasThinkingParams(baseRequest)) {
+        updateThinkingCapability(model, true, baseRequest);
       }
       return { response: res, model };
 
     } catch (err) {
-      if (baseRequest.extra_body && err.response?.status === 400) {
-        console.warn(`[FALLBACK] Model ${model} failed with 400 and extra_body, retrying without thinking mode...`);
+      if (hasThinkingParams(baseRequest) && err.response?.status === 400) {
+        console.warn(`[FALLBACK] Model ${model} failed with 400 and thinking params, retrying without thinking mode...`);
         updateThinkingCapability(model, false, null);
         try {
-          const cleanRequest = { ...baseRequest };
-          delete cleanRequest.extra_body;
+          const cleanRequest = removeThinkingParams(baseRequest);
           const res = await makeRequest(cleanRequest, model);
           return { response: res, model };
         } catch (retryErr) {
@@ -1103,63 +1114,58 @@ app.post('/v1/chat/completions', async (req, res) => {
 
     let requestEnableThinking = false;
     let requestShowReasoning = false;
-    let thinkingKwargs = null;
+    let detectedThinkingType = null; // 'standard' | 'minimax' | 'nemotron' | null
 
     if (registryEntry) {
       if (registryEntry.thinking_enabled) {
         requestEnableThinking = true;
         requestShowReasoning = true;
-        if (registryEntry.thinking_type === 'minimax') {
-          thinkingKwargs = { thinking_mode: 'enabled' };
-        } else if (registryEntry.thinking_type === 'nemotron') {
-          thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
-        } else if (registryEntry.thinking_type === 'standard') {
-          thinkingKwargs = { thinking: true };
-        } else {
-          const pLower = primaryModel.toLowerCase();
-          if (pLower.includes('minimax')) {
-            thinkingKwargs = { thinking_mode: 'enabled' };
-          } else if (pLower.includes('nemotron') || pLower.includes('ultra')) {
-            thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
-          } else {
-            thinkingKwargs = { thinking: true };
-          }
-        }
+        detectedThinkingType = registryEntry.thinking_type;
       } else if (registryEntry.thinking_type === 'unknown') {
         // Auto-detect on first call
         requestEnableThinking = true;
         requestShowReasoning = true;
-        const pLower = primaryModel.toLowerCase();
-        if (pLower.includes('minimax')) {
-          thinkingKwargs = { thinking_mode: 'enabled' };
-        } else if (pLower.includes('nemotron') || pLower.includes('ultra')) {
-          thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
-        } else {
-          thinkingKwargs = { thinking: true };
-        }
       }
     } else {
+      // No entry yet, will auto-detect
       requestEnableThinking = true;
       requestShowReasoning = true;
+    }
+
+    // Resolve thinking type if not already known from registry
+    if (requestEnableThinking && !detectedThinkingType) {
       const pLower = (typeof cleanModel === 'string' ? cleanModel : primaryModel).toLowerCase();
       if (pLower.includes('minimax')) {
-        thinkingKwargs = { thinking_mode: 'enabled' };
-      } else if (pLower.includes('nemotron') || pLower.includes('ultra')) {
-        thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
+        detectedThinkingType = 'minimax';
+      } else if (pLower.includes('nemotron') || pLower.includes('ultra') || pLower.includes('super') || pLower.includes('nano')) {
+        detectedThinkingType = 'nemotron';
       } else {
-        thinkingKwargs = { thinking: true };
+        detectedThinkingType = 'standard';
       }
     }
 
+    // Build baseRequest with correct thinking param placement per model type
+    // Nemotron: reasoning_effort & reasoning_budget are TOP-LEVEL request body fields
+    // Standard: { thinking: true } goes inside extra_body.chat_template_kwargs
+    // MiniMax:  { thinking_mode: 'enabled' } goes inside extra_body.chat_template_kwargs
     const baseRequest = {
       messages: processedMessages,
       temperature: temperature ?? 0.7,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
       stream: stream || false,
-      extra_body: (requestEnableThinking && thinkingKwargs)
-        ? { chat_template_kwargs: thinkingKwargs }
-        : undefined
     };
+
+    if (requestEnableThinking && detectedThinkingType) {
+      if (detectedThinkingType === 'nemotron') {
+        baseRequest.reasoning_effort = 'high';
+        baseRequest.reasoning_budget = 16384;
+      } else if (detectedThinkingType === 'minimax') {
+        baseRequest.extra_body = { chat_template_kwargs: { thinking_mode: 'enabled' } };
+      } else {
+        // standard (DeepSeek, Qwen, etc.)
+        baseRequest.extra_body = { chat_template_kwargs: { thinking: true } };
+      }
+    }
 
 
     const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
