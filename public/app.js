@@ -1281,7 +1281,9 @@
       if (m.thinking_type === 'none' || m.thinking_capable === false) {
         thinkingBadge = `<span class="model-status-badge status-untested"><i data-lucide="slash"></i> Not supported</span>`;
       } else if (m.thinking_capable) {
-        const typeLabel = m.thinking_type === 'minimax' ? 'MiniMax Thinking' : 'Standard Thinking';
+        let typeLabel = 'Standard Thinking';
+        if (m.thinking_type === 'minimax') typeLabel = 'MiniMax Thinking';
+        if (m.thinking_type === 'nemotron') typeLabel = 'Nemotron Reasoning';
         thinkingBadge = `<span class="model-status-badge status-online"><i data-lucide="brain"></i> ${typeLabel}</span>`;
         thinkingToggle = `
           <label class="switch switch-sm" title="Toggle Thinking for this model">
@@ -1307,6 +1309,9 @@
           <div class="model-card-right">
             ${thinkingBadge}
             ${thinkingToggle}
+            <button class="btn btn-secondary btn-xs btn-mc-reset-registry" data-index="${idx}" title="Reset cached info & forget model from Redis">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
           </div>
         </div>
       `;
@@ -1586,6 +1591,20 @@
     }
 
     if (el.mcModelRegistry) {
+      el.mcModelRegistry.addEventListener('click', (e) => {
+        const btnReset = e.target.closest('.btn-mc-reset-registry');
+        if (btnReset) {
+          const idx = parseInt(btnReset.dataset.index, 10);
+          const registry = state.modelConfig.model_registry || [];
+          if (registry[idx]) {
+            const removed = registry.splice(idx, 1);
+            renderModelConfigUI();
+            saveModelConfig();
+            log(`Reset & forgot model ${removed[0]?.id || ''} from Redis registry. Auto-detect will run on next call.`, 'info');
+          }
+        }
+      });
+
       el.mcModelRegistry.addEventListener('change', (e) => {
         if (e.target.classList.contains('mc-registry-think-toggle')) {
           const idx = parseInt(e.target.dataset.index, 10);

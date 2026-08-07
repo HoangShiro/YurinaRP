@@ -126,13 +126,24 @@ function updateThinkingCapability(modelId, capable, extraBody) {
   let entry = modelConfig.model_registry.find(m => m.id === modelId);
   const now = new Date().toISOString();
 
+  let thinkingType = 'none';
+  if (capable) {
+    if (extraBody?.chat_template_kwargs?.thinking_mode) {
+      thinkingType = 'minimax';
+    } else if (extraBody?.chat_template_kwargs?.reasoning_effort) {
+      thinkingType = 'nemotron';
+    } else {
+      thinkingType = 'standard';
+    }
+  }
+
   if (!entry) {
     entry = {
       id: modelId,
       label: modelId.includes('/') ? modelId.split('/').pop() : modelId,
       last_used: now,
       thinking_capable: capable,
-      thinking_type: capable ? (extraBody?.chat_template_kwargs?.thinking_mode ? 'minimax' : 'standard') : 'none',
+      thinking_type: thinkingType,
       thinking_enabled: capable
     };
     modelConfig.model_registry.unshift(entry);
@@ -144,7 +155,7 @@ function updateThinkingCapability(modelId, capable, extraBody) {
     if (capable) {
       const wasUnknownOrNone = !entry.thinking_capable;
       entry.thinking_capable = true;
-      entry.thinking_type = extraBody?.chat_template_kwargs?.thinking_mode ? 'minimax' : 'standard';
+      entry.thinking_type = thinkingType;
       if (wasUnknownOrNone) {
         entry.thinking_enabled = true;
       }
@@ -1100,24 +1111,44 @@ app.post('/v1/chat/completions', async (req, res) => {
         requestShowReasoning = true;
         if (registryEntry.thinking_type === 'minimax') {
           thinkingKwargs = { thinking_mode: 'enabled' };
+        } else if (registryEntry.thinking_type === 'nemotron') {
+          thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
         } else if (registryEntry.thinking_type === 'standard') {
           thinkingKwargs = { thinking: true };
         } else {
-          const isMinimax = primaryModel.toLowerCase().includes('minimax');
-          thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
+          const pLower = primaryModel.toLowerCase();
+          if (pLower.includes('minimax')) {
+            thinkingKwargs = { thinking_mode: 'enabled' };
+          } else if (pLower.includes('nemotron') || pLower.includes('ultra')) {
+            thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
+          } else {
+            thinkingKwargs = { thinking: true };
+          }
         }
       } else if (registryEntry.thinking_type === 'unknown') {
         // Auto-detect on first call
         requestEnableThinking = true;
         requestShowReasoning = true;
-        const isMinimax = primaryModel.toLowerCase().includes('minimax');
-        thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
+        const pLower = primaryModel.toLowerCase();
+        if (pLower.includes('minimax')) {
+          thinkingKwargs = { thinking_mode: 'enabled' };
+        } else if (pLower.includes('nemotron') || pLower.includes('ultra')) {
+          thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
+        } else {
+          thinkingKwargs = { thinking: true };
+        }
       }
     } else {
       requestEnableThinking = true;
       requestShowReasoning = true;
-      const isMinimax = (typeof cleanModel === 'string' && cleanModel.toLowerCase().includes('minimax'));
-      thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
+      const pLower = (typeof cleanModel === 'string' ? cleanModel : primaryModel).toLowerCase();
+      if (pLower.includes('minimax')) {
+        thinkingKwargs = { thinking_mode: 'enabled' };
+      } else if (pLower.includes('nemotron') || pLower.includes('ultra')) {
+        thinkingKwargs = { reasoning_effort: 'high', reasoning_budget: 16384 };
+      } else {
+        thinkingKwargs = { thinking: true };
+      }
     }
 
     const baseRequest = {
