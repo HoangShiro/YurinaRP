@@ -1137,9 +1137,13 @@ app.post('/v1/chat/completions', async (req, res) => {
       };
 
       const processLine = (line) => {
-        if (!line.startsWith('data: ')) return;
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) return;
 
-        if (line.includes('[DONE]')) {
+        const dataStr = trimmed.slice(6).trim();
+        if (!dataStr) return;
+
+        if (dataStr === '[DONE]' || dataStr.includes('[DONE]')) {
           if (!doneSent) {
             safeWrite(res, 'data: [DONE]\n\n');
             doneSent = true;
@@ -1149,7 +1153,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         }
 
         try {
-          const data = JSON.parse(line.slice(6));
+          const data = JSON.parse(dataStr);
           const delta = data.choices?.[0]?.delta;
 
           if (delta) {
@@ -1158,14 +1162,14 @@ app.post('/v1/chat/completions', async (req, res) => {
 
             if (requestShowReasoning) {
               if (reasoning && !reasoningOpen) {
-                content = `<thinking>\n${reasoning.replace(/\n/g, '\\n')}`;
+                content = `<thinking>\n${reasoning}`;
                 reasoningOpen = true;
               } else if (reasoning) {
-                content = reasoning.replace(/\n/g, '\\n');
+                content = reasoning;
               }
 
               if (delta.content && reasoningOpen) {
-                content += `\n</thinking>\n\n${delta.content}`;
+                content = `\n</thinking>\n\n${delta.content}`;
                 reasoningOpen = false;
               }
             }
@@ -1181,14 +1185,7 @@ app.post('/v1/chat/completions', async (req, res) => {
           safeWrite(res, `data: ${JSON.stringify(data)}\n\n`);
 
         } catch (parseErr) {
-          console.warn('[STREAM] Invalid JSON line:', line.slice(0, 100));
-          safeWrite(res, `data: ${JSON.stringify({ 
-            error: { 
-              message: 'Upstream sent malformed chunk', 
-              type: 'stream_parse_error',
-              details: line.slice(0, 100)
-            } 
-          })}\n\n`);
+          console.warn('[STREAM] Skipping invalid/partial JSON chunk:', trimmed.slice(0, 120));
         }
       };
 
@@ -1214,7 +1211,7 @@ app.post('/v1/chat/completions', async (req, res) => {
           return;
         }
 
-        const lines = buffer.split('\n');
+        const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || '';
 
         for (const line of lines) {
@@ -1230,7 +1227,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         buffer += decoder.end();
 
         if (buffer.trim()) {
-          for (const line of buffer.split('\n')) {
+          for (const line of buffer.split(/\r?\n/)) {
             processLine(line);
           }
         }
