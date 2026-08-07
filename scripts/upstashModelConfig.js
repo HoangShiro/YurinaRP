@@ -12,41 +12,8 @@ function getUpstashConfig() {
 function getDefaultModelConfig() {
   return {
     fallback_enabled: false,
-    thinking_enabled: true,
     fallback_models: [],
-    recent_models: [],
-    model_capabilities: {}
-  };
-}
-
-function addRecentModel(config, modelId) {
-  if (!modelId || typeof modelId !== 'string') return false;
-  if (!Array.isArray(config.recent_models)) {
-    config.recent_models = [];
-  }
-  const cleanId = modelId.trim();
-  const existingIdx = config.recent_models.indexOf(cleanId);
-  if (existingIdx === 0) return false; // Already at top
-  
-  if (existingIdx > 0) {
-    config.recent_models.splice(existingIdx, 1);
-  }
-  config.recent_models.unshift(cleanId);
-  if (config.recent_models.length > 10) {
-    config.recent_models = config.recent_models.slice(0, 10);
-  }
-  return true;
-}
-
-function setModelCapability(config, modelId, capData) {
-  if (!modelId || typeof modelId !== 'string') return;
-  if (!config.model_capabilities || typeof config.model_capabilities !== 'object') {
-    config.model_capabilities = {};
-  }
-  config.model_capabilities[modelId] = {
-    supports_thinking: !!capData.supports_thinking,
-    strategy: capData.strategy || 'none', // 'thinking' | 'thinking_mode' | 'reasoning_effort' | 'none'
-    tested_at: Date.now()
+    model_registry: []
   };
 }
 
@@ -65,10 +32,8 @@ async function fetchRemoteModelConfigStore() {
     }
     const store = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
     if (store && typeof store === 'object') {
-      // Ensure defaults for missing keys
-      if (typeof store.thinking_enabled !== 'boolean') store.thinking_enabled = true;
-      if (!Array.isArray(store.recent_models)) store.recent_models = [];
-      if (!store.model_capabilities || typeof store.model_capabilities !== 'object') store.model_capabilities = {};
+      if (!Array.isArray(store.fallback_models)) store.fallback_models = [];
+      if (!Array.isArray(store.model_registry)) store.model_registry = [];
       return store;
     }
     return getDefaultModelConfig();
@@ -107,8 +72,5 @@ module.exports = {
   fetchRemoteModelConfigStore,
   saveRemoteModelConfigStore,
   getUpstashConfig,
-  getDefaultModelConfig,
-  addRecentModel,
-  setModelCapability
+  getDefaultModelConfig
 };
-

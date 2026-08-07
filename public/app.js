@@ -62,10 +62,9 @@
     spRuleEditorView: document.getElementById('spRuleEditorView'),
 
     // Model Config Elements
-    mcThinkingToggle: document.getElementById('mcThinkingToggle'),
     mcFallbackToggle: document.getElementById('mcFallbackToggle'),
-    mcRecentModelsList: document.getElementById('mcRecentModelsList'),
     mcModelList: document.getElementById('mcModelList'),
+    mcRegistryList: document.getElementById('mcRegistryList'),
     mcAddModelId: document.getElementById('mcAddModelId'),
     mcAddModelLabel: document.getElementById('mcAddModelLabel'),
     btnMcAddModel: document.getElementById('btnMcAddModel'),
@@ -1226,11 +1225,9 @@
         el.btnMcSave.innerHTML = `<i data-lucide="loader" class="spin"></i> Saving...`;
       }
       const payload = {
-        thinking_enabled: state.modelConfig.thinking_enabled !== false,
         fallback_enabled: state.modelConfig.fallback_enabled,
         fallback_models: state.modelConfig.fallback_models,
-        recent_models: state.modelConfig.recent_models || [],
-        model_capabilities: state.modelConfig.model_capabilities || {}
+        model_registry: state.modelConfig.model_registry || []
       };
 
       const res = await fetch('/v1/model-config', {
@@ -1255,28 +1252,79 @@
     }
   }
 
-  function renderModelConfigUI() {
-    if (el.mcThinkingToggle) {
-      el.mcThinkingToggle.checked = state.modelConfig.thinking_enabled !== false;
+  function formatTimeAgo(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return `${Math.floor(diffSec / 86400)}d ago`;
+  }
+
+  function renderModelRegistry() {
+    if (!el.mcRegistryList) return;
+    const registry = state.modelConfig.model_registry || [];
+
+    if (registry.length === 0) {
+      el.mcRegistryList.innerHTML = `<div class="empty-model-list">No model history recorded yet. Use a model via API to auto-register it here.</div>`;
+      if (window.lucide) window.lucide.createIcons();
+      return;
     }
+
+    el.mcRegistryList.innerHTML = registry.map((m, idx) => {
+      let badge = `<span class="thinking-badge thinking-badge-unknown"><i data-lucide="help-circle"></i> Detecting...</span>`;
+      let icon = '';
+      let toggleSwitch = '';
+
+      if (m.thinking_capable) {
+        icon = '🧠 ';
+        if (m.thinking_type === 'minimax') {
+          badge = `<span class="thinking-badge thinking-badge-minimax"><i data-lucide="brain"></i> MiniMax Thinking</span>`;
+        } else {
+          badge = `<span class="thinking-badge thinking-badge-standard"><i data-lucide="brain"></i> Standard Thinking</span>`;
+        }
+
+        toggleSwitch = `
+          <label class="switch" title="Toggle Thinking Mode for ${escapeHtml(m.id)}">
+            <input type="checkbox" class="registry-thinking-toggle" data-index="${idx}" ${m.thinking_enabled ? 'checked' : ''}>
+            <span class="slider round"></span>
+          </label>
+        `;
+      } else if (m.thinking_type === 'none') {
+        badge = `<span class="thinking-badge thinking-badge-none"><i data-lucide="slash"></i> No Thinking</span>`;
+      }
+
+      const timeAgo = formatTimeAgo(m.last_used);
+
+      return `
+        <div class="registry-card" data-index="${idx}">
+          <div class="registry-card-left">
+            <div class="thinking-icon">${icon}</div>
+            <div class="registry-card-info">
+              <div class="registry-card-title">${escapeHtml(m.label || m.id)}</div>
+              <div class="registry-card-id">${escapeHtml(m.id)}</div>
+            </div>
+          </div>
+          <div class="registry-card-right">
+            ${badge}
+            <div class="last-used-text">${timeAgo}</div>
+            ${toggleSwitch}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function renderModelConfigUI() {
+    renderModelRegistry();
+
     if (el.mcFallbackToggle) {
       el.mcFallbackToggle.checked = !!state.modelConfig.fallback_enabled;
     }
 
-    // Render Recent Models Chips Bar
-    if (el.mcRecentModelsList) {
-      const recent = state.modelConfig.recent_models || [];
-      if (recent.length === 0) {
-        el.mcRecentModelsList.innerHTML = `<span class="text-muted text-xs font-italic">No recently used models recorded yet.</span>`;
-      } else {
-        el.mcRecentModelsList.innerHTML = recent.map(id => `
-          <div class="recent-model-chip" title="Click + to add to Fallback Chain">
-            <span>${escapeHtml(id)}</span>
-            <button type="button" class="recent-model-add-btn btn-add-recent" data-id="${escapeHtml(id)}" title="Add to Fallback Chain">+</button>
-          </div>
-        `).join('');
-      }
-    }
 
     if (!el.mcModelList) return;
     const models = state.modelConfig.fallback_models || [];
@@ -1287,13 +1335,10 @@
       return;
     }
 
-    const caps = state.modelConfig.model_capabilities || {};
-
     el.mcModelList.innerHTML = models.map((m, idx) => {
       const isFirst = idx === 0;
       const isLast = idx === models.length - 1;
       const test = state.modelTestResults[m.id] || {};
-      const cap = caps[m.id];
 
       let statusBadge = `<span class="model-status-badge status-untested"><i data-lucide="help-circle"></i> Untested</span>`;
       if (test.testing) {
@@ -1303,12 +1348,6 @@
       } else if (test.error) {
         statusBadge = `<span class="model-status-badge status-offline" title="${escapeHtml(test.error)}"><i data-lucide="alert-triangle"></i> Offline</span>`;
       }
-
-      const thinkingBadge = cap && cap.supports_thinking ? `
-        <span class="badge-thinking" title="Strategy: ${escapeHtml(cap.strategy)}">
-          <i data-lucide="brain"></i> Thinking
-        </span>
-      ` : '';
 
       const errorBox = test.error ? `
         <div class="model-error-detail">
@@ -1326,7 +1365,6 @@
                 <div class="model-card-title">
                   <input type="checkbox" class="mc-toggle-item" data-index="${idx}" ${m.enabled ? 'checked' : ''}>
                   <span>${escapeHtml(m.label || m.id)}</span>
-                  ${thinkingBadge}
                 </div>
                 <div class="model-card-id">${escapeHtml(m.id)}</div>
               </div>
@@ -1334,7 +1372,7 @@
             <div class="model-card-right">
               ${statusBadge}
               <div class="model-actions">
-                <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency & auto-detect thinking">
+                <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency">
                   <i data-lucide="flask-conical"></i>
                 </button>
                 <button class="btn btn-secondary btn-xs btn-mc-up" data-index="${idx}" ${isFirst ? 'disabled' : ''} title="Move Up">
@@ -1357,7 +1395,6 @@
     if (window.lucide) window.lucide.createIcons();
   }
 
-
   async function testSingleModel(modelId) {
     state.modelTestResults[modelId] = { testing: true };
     renderModelConfigUI();
@@ -1375,15 +1412,10 @@
         error: data.error
       };
       if (data.ok) {
-        if (data.capability) {
-          if (!state.modelConfig.model_capabilities) state.modelConfig.model_capabilities = {};
-          state.modelConfig.model_capabilities[modelId] = data.capability;
-        }
         log(`Model ${modelId} is online! Latency: ${data.latency_ms}ms`, 'info');
       } else {
         log(`Model ${modelId} test failed: ${data.error}`, 'error');
       }
-
     } catch (err) {
       state.modelTestResults[modelId] = {
         testing: false,
@@ -1459,42 +1491,11 @@
     });
 
     // Model Config Events
-    if (el.mcThinkingToggle) {
-      el.mcThinkingToggle.addEventListener('change', (e) => {
-        state.modelConfig.thinking_enabled = e.target.checked;
-        log(`Global Thinking Mode set to: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`, 'info');
-      });
-    }
-
     if (el.mcFallbackToggle) {
       el.mcFallbackToggle.addEventListener('change', (e) => {
         state.modelConfig.fallback_enabled = e.target.checked;
       });
     }
-
-    if (el.mcRecentModelsList) {
-      el.mcRecentModelsList.addEventListener('click', (e) => {
-        const btnAddRecent = e.target.closest('.btn-add-recent');
-        if (btnAddRecent) {
-          const modelId = btnAddRecent.dataset.id;
-          if (!Array.isArray(state.modelConfig.fallback_models)) {
-            state.modelConfig.fallback_models = [];
-          }
-          if (state.modelConfig.fallback_models.some(m => m.id === modelId)) {
-            log(`Model ${modelId} is already in fallback chain`, 'warn');
-            return;
-          }
-          state.modelConfig.fallback_models.push({
-            id: modelId,
-            label: modelId,
-            enabled: true
-          });
-          renderModelConfigUI();
-          log(`Added ${modelId} to Fallback Chain from recent models. Click Save to commit.`, 'info');
-        }
-      });
-    }
-
 
     if (el.btnMcSave) {
       el.btnMcSave.addEventListener('click', saveModelConfig);
@@ -1587,6 +1588,20 @@
         }
       });
     }
+
+    if (el.mcRegistryList) {
+      el.mcRegistryList.addEventListener('change', (e) => {
+        if (e.target.classList.contains('registry-thinking-toggle')) {
+          const idx = parseInt(e.target.dataset.index, 10);
+          if (state.modelConfig.model_registry && state.modelConfig.model_registry[idx]) {
+            state.modelConfig.model_registry[idx].thinking_enabled = e.target.checked;
+            renderModelRegistry();
+            saveModelConfig();
+          }
+        }
+      });
+    }
+
 
 
     el.btnImportDb.addEventListener('click', () => {

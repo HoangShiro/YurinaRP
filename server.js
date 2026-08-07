@@ -18,7 +18,7 @@ const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
 const { fetchChatHistory, saveChatHistory, fetchChatSummary, saveChatSummary } = require('./scripts/upstashChatHistory');
-const { fetchRemoteModelConfigStore, saveRemoteModelConfigStore, getDefaultModelConfig, addRecentModel, setModelCapability } = require('./scripts/upstashModelConfig');
+const { fetchRemoteModelConfigStore, saveRemoteModelConfigStore, getDefaultModelConfig } = require('./scripts/upstashModelConfig');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,6 +111,75 @@ function getActiveModelChain(primaryModel) {
   if (!primaryModel) return fallbacks;
   return [primaryModel, ...fallbacks.filter(id => id !== primaryModel)];
 }
+
+function getModelRegistryEntry(modelId) {
+  if (!Array.isArray(modelConfig.model_registry)) modelConfig.model_registry = [];
+  return modelConfig.model_registry.find(m => m.id === modelId) || null;
+}
+
+function updateThinkingCapability(modelId, capable, extraBodyUsed) {
+  if (!Array.isArray(modelConfig.model_registry)) modelConfig.model_registry = [];
+  const registry = modelConfig.model_registry;
+  const type = capable
+    ? (extraBodyUsed?.chat_template_kwargs?.thinking_mode ? 'minimax' : 'standard')
+    : 'none';
+
+  let entry = registry.find(m => m.id === modelId);
+  if (!entry) {
+    entry = {
+      id: modelId,
+      label: modelId.split('/').pop(),
+      last_used: new Date().toISOString(),
+      thinking_capable: capable,
+      thinking_type: type,
+      thinking_enabled: capable
+    };
+    registry.unshift(entry);
+    if (registry.length > 10) registry.splice(10);
+  } else {
+    entry.thinking_capable = capable;
+    entry.thinking_type = type;
+    if (!capable) {
+      entry.thinking_enabled = false;
+    }
+  }
+
+  saveRemoteModelConfigStore(modelConfig).catch(err => {
+    console.warn('[REGISTRY] Failed to save updated thinking capability:', err.message);
+  });
+}
+
+function registerModelUsage(modelId) {
+  if (!Array.isArray(modelConfig.model_registry)) modelConfig.model_registry = [];
+  const registry = modelConfig.model_registry;
+  const now = new Date().toISOString();
+  
+  const existingIdx = registry.findIndex(m => m.id === modelId);
+  if (existingIdx !== -1) {
+    const existing = registry[existingIdx];
+    existing.last_used = now;
+    if (existingIdx > 0) {
+      registry.splice(existingIdx, 1);
+      registry.unshift(existing);
+    }
+  } else {
+    const entry = {
+      id: modelId,
+      label: modelId.split('/').pop(),
+      last_used: now,
+      thinking_capable: false,
+      thinking_type: 'unknown',
+      thinking_enabled: false
+    };
+    registry.unshift(entry);
+    if (registry.length > 10) registry.splice(10);
+  }
+
+  saveRemoteModelConfigStore(modelConfig).catch(err => {
+    console.warn('[REGISTRY] Failed to auto-save model usage:', err.message);
+  });
+}
+
 
 
 // ─── Auth Helpers ────────────────────────────────────────────────────────────
@@ -310,18 +379,21 @@ async function callWithFallback(baseRequest, models) {
   for (const model of models) {
     try {
       const res = await makeRequest(baseRequest, model);
+      if (baseRequest.extra_body) {
+        updateThinkingCapability(model, true, baseRequest.extra_body);
+      }
+      registerModelUsage(model);
       return { response: res, model };
 
     } catch (err) {
       if (baseRequest.extra_body && err.response?.status === 400) {
-        console.warn(`[FALLBACK] Model ${model} failed with 400 and extra_body, auto-caching supports_thinking=false and retrying without thinking mode...`);
-        setModelCapability(modelConfig, model, { supports_thinking: false, strategy: 'none' });
-        saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Auto-save capability error:', e.message));
-
+        console.warn(`[FALLBACK] Model ${model} failed with 400 and extra_body, retrying without thinking mode...`);
         try {
           const cleanRequest = { ...baseRequest };
           delete cleanRequest.extra_body;
           const res = await makeRequest(cleanRequest, model);
+          updateThinkingCapability(model, false, null);
+          registerModelUsage(model);
           return { response: res, model };
         } catch (retryErr) {
           lastError = retryErr;
@@ -331,7 +403,6 @@ async function callWithFallback(baseRequest, models) {
             retryErr.response?.data?.error?.message || retryErr.message
           );
         }
-
       } else {
         lastError = err;
         console.warn(
@@ -641,43 +712,6 @@ app.post('/v1/model-config', async (req, res) => {
   }
 });
 
-async function probeModelThinking(modelId) {
-  if (!modelId || typeof modelId !== 'string') return { supports_thinking: false, strategy: 'none' };
-  
-  const strategies = [
-    { name: 'thinking', kwargs: { thinking: true } },
-    { name: 'thinking_mode', kwargs: { thinking_mode: 'enabled' } },
-    { name: 'reasoning_effort', kwargs: { reasoning_effort: 'high' } }
-  ];
-
-  for (const s of strategies) {
-    try {
-      const res = await axios.post(`${NIM_API_BASE}/chat/completions`, {
-        model: modelId,
-        messages: [{ role: 'user', content: 'Hi' }],
-        max_tokens: 5,
-        stream: false,
-        extra_body: { chat_template_kwargs: s.kwargs }
-      }, {
-        headers: {
-          Authorization: `Bearer ${NIM_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 10000
-      });
-      if (res.status === 200) {
-        console.log(`[PROBE] Model ${modelId} supports thinking strategy: '${s.name}'`);
-        return { supports_thinking: true, strategy: s.name };
-      }
-    } catch (err) {
-      console.log(`[PROBE] Strategy '${s.name}' unsupported for ${modelId}: ${err.response?.status || err.message}`);
-    }
-  }
-
-  console.log(`[PROBE] Model ${modelId} does not support thinking parameters`);
-  return { supports_thinking: false, strategy: 'none' };
-}
-
 app.post('/v1/model-test', async (req, res) => {
   const { model_id } = req.body;
   if (!model_id || typeof model_id !== 'string') {
@@ -699,23 +733,13 @@ app.post('/v1/model-test', async (req, res) => {
       timeout: 15000
     });
     const latency_ms = Date.now() - start;
-
-    // Auto-probe thinking capability if not cached yet
-    let cap = modelConfig.model_capabilities?.[model_id];
-    if (!cap) {
-      cap = await probeModelThinking(model_id);
-      setModelCapability(modelConfig, model_id, cap);
-      saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Failed auto-save capability:', e.message));
-    }
-
-    return res.json({ ok: true, latency_ms, model: model_id, capability: cap });
+    return res.json({ ok: true, latency_ms, model: model_id });
   } catch (err) {
     const latency_ms = Date.now() - start;
     const errorMsg = err.response?.data?.error?.message || err.response?.data?.detail || err.message;
     return res.json({ ok: false, latency_ms, model: model_id, error: errorMsg });
   }
 });
-
 
 // Legacy backward compatibility route
 app.get('/v1/lorebook', async (req, res) => {
@@ -974,105 +998,35 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
 
-    const cleanModel = typeof model === 'string' ? model.trim() : model;
+    const cleanModel = typeof model === 'string' ? model.replace(/\[think\]/i, '').trim() : model;
 
     const primaryModel = MODEL_MAPPING[cleanModel] || cleanModel;
     const modelChain = getActiveModelChain(primaryModel);
 
-    // Record model usage into recent_models
-    if (primaryModel && addRecentModel(modelConfig, primaryModel)) {
-      saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Auto-save recent_models error:', e.message));
-    }
+    // Smart Thinking Capability Lookup
+    const registryEntry = getModelRegistryEntry(primaryModel);
+    let requestEnableThinking = false;
+    let thinkingKwargs = null;
 
-    // 1. Fetch System Prompt Store & Tiered LorebookStore
-    const systemPromptStore = await fetchRemoteSystemPromptStore();
-    const lorebookStore = await fetchRemoteLorebookStore();
-
-    // Prepend base system prompt if configured
-    if (systemPromptStore && systemPromptStore.system_prompt && Array.isArray(messages) && messages.length > 0) {
-      if (messages[0].role === 'system') {
-        if (typeof messages[0].content === 'string' && !messages[0].content.includes(systemPromptStore.system_prompt)) {
-          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
-        }
-      } else {
-        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
-      }
-    }
-
-    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active
-    const loreActive = isLorebookStoreActive(lorebookStore);
-    const worldStateActive = shouldIncludeWorldState(lorebookStore);
-
-    if (loreActive) {
-      const compiledLore = compileLorebookStore(lorebookStore, messages);
-      const contextParts = [];
-
-      if (worldStateActive) {
-        const worldState = await processWorldStateTick(messages);
-        const worldSnapshot = compileWorldStateSnapshot(worldState);
-        if (worldSnapshot) contextParts.push(worldSnapshot);
-      }
-
-      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
-        contextParts.push(compiledLore.compiledPrompt);
-      }
-      const combinedContext = contextParts.filter(Boolean).join('\n\n');
-
-      if (combinedContext && Array.isArray(messages) && messages.length > 0) {
-        if (messages[0].role === 'system') {
-          if (typeof messages[0].content === 'string') {
-            messages[0].content += '\n\n' + combinedContext;
-          }
+    if (registryEntry) {
+      if (registryEntry.thinking_capable && registryEntry.thinking_enabled) {
+        requestEnableThinking = true;
+        if (registryEntry.thinking_type === 'minimax') {
+          thinkingKwargs = { thinking_mode: 'enabled' };
         } else {
-          messages.unshift({ role: 'system', content: combinedContext });
+          thinkingKwargs = { thinking: true };
         }
+      } else if (registryEntry.thinking_type === 'unknown') {
+        // Auto-detect phase for first-time model call
+        requestEnableThinking = true;
+        const isMinimax = (typeof primaryModel === 'string' && primaryModel.toLowerCase().includes('minimax'));
+        thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
       }
-
-      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
-        for (let i = messages.length - 1; i >= 0; i--) {
-          if (messages[i].role === 'user') {
-            if (typeof messages[i].content === 'string') {
-              messages[i].content += '\n\n' + compiledLore.compiledPrompt;
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    const {
-      messages: eventProcessedMessages,
-      fixFormat,
-      autoLineBreak,
-      triggeredPrompts
-    } = processEventTriggers(messages, systemPromptStore);
-
-    if (triggeredPrompts.length > 0) {
-      console.log(`[PROXY] Activated ${triggeredPrompts.length} event trigger prompt(s)`);
-    }
-    if (fixFormat) console.log('[PROXY] Feature: Fix format ENABLED');
-    if (autoLineBreak) console.log('[PROXY] Feature: Auto line break ENABLED');
-
-    const processedMessages = processOocPrompts(eventProcessedMessages);
-
-    // Determine thinking extra_body based on cached capability or default
-    const isGlobalThinkingEnabled = modelConfig.thinking_enabled !== false;
-    let extraBody = undefined;
-
-    if (isGlobalThinkingEnabled) {
-      const cap = modelConfig.model_capabilities?.[primaryModel];
-      if (cap && cap.supports_thinking) {
-        if (cap.strategy === 'thinking_mode') {
-          extraBody = { chat_template_kwargs: { thinking_mode: 'enabled' } };
-        } else if (cap.strategy === 'reasoning_effort') {
-          extraBody = { chat_template_kwargs: { reasoning_effort: 'high' } };
-        } else if (cap.strategy === 'thinking') {
-          extraBody = { chat_template_kwargs: { thinking: true } };
-        }
-      } else if (!cap) {
-        const isMinimaxM3 = (typeof primaryModel === 'string' && primaryModel.toLowerCase().includes('minimax-m3'));
-        extraBody = { chat_template_kwargs: isMinimaxM3 ? { thinking_mode: 'enabled' } : { thinking: true } };
-      }
+    } else {
+      // First-time model call — auto-detect phase
+      requestEnableThinking = true;
+      const isMinimax = (typeof primaryModel === 'string' && primaryModel.toLowerCase().includes('minimax'));
+      thinkingKwargs = isMinimax ? { thinking_mode: 'enabled' } : { thinking: true };
     }
 
     const baseRequest = {
@@ -1080,9 +1034,10 @@ app.post('/v1/chat/completions', async (req, res) => {
       temperature: temperature ?? 0.7,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
       stream: stream || false,
-      extra_body: extraBody
+      extra_body: requestEnableThinking && thinkingKwargs
+        ? { chat_template_kwargs: thinkingKwargs }
+        : undefined
     };
-
 
     const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
     upstreamStream = response.data;
@@ -1141,13 +1096,9 @@ app.post('/v1/chat/completions', async (req, res) => {
       };
 
       const processLine = (line) => {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) return;
+        if (!line.startsWith('data: ')) return;
 
-        const dataStr = trimmed.slice(6).trim();
-        if (!dataStr) return;
-
-        if (dataStr === '[DONE]' || dataStr.includes('[DONE]')) {
+        if (line.includes('[DONE]')) {
           if (!doneSent) {
             safeWrite(res, 'data: [DONE]\n\n');
             doneSent = true;
@@ -1157,7 +1108,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         }
 
         try {
-          const data = JSON.parse(dataStr);
+          const data = JSON.parse(line.slice(6));
           const delta = data.choices?.[0]?.delta;
 
           if (delta) {
@@ -1166,14 +1117,14 @@ app.post('/v1/chat/completions', async (req, res) => {
 
             if (requestShowReasoning) {
               if (reasoning && !reasoningOpen) {
-                content = `<thinking>\n${reasoning}`;
+                content = `<thinking>\n${reasoning.replace(/\n/g, '\\n')}`;
                 reasoningOpen = true;
               } else if (reasoning) {
-                content = reasoning;
+                content = reasoning.replace(/\n/g, '\\n');
               }
 
               if (delta.content && reasoningOpen) {
-                content = `\n</thinking>\n\n${delta.content}`;
+                content += `\n</thinking>\n\n${delta.content}`;
                 reasoningOpen = false;
               }
             }
@@ -1189,7 +1140,14 @@ app.post('/v1/chat/completions', async (req, res) => {
           safeWrite(res, `data: ${JSON.stringify(data)}\n\n`);
 
         } catch (parseErr) {
-          console.warn('[STREAM] Skipping invalid/partial JSON chunk:', trimmed.slice(0, 120));
+          console.warn('[STREAM] Invalid JSON line:', line.slice(0, 100));
+          safeWrite(res, `data: ${JSON.stringify({ 
+            error: { 
+              message: 'Upstream sent malformed chunk', 
+              type: 'stream_parse_error',
+              details: line.slice(0, 100)
+            } 
+          })}\n\n`);
         }
       };
 
@@ -1215,14 +1173,11 @@ app.post('/v1/chat/completions', async (req, res) => {
           return;
         }
 
-        const blocks = buffer.split(/(?:\r?\n){2,}/);
-        buffer = blocks.pop() || '';
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-        for (const block of blocks) {
-          const lines = block.split(/\r?\n/);
-          for (const line of lines) {
-            processLine(line);
-          }
+        for (const line of lines) {
+          processLine(line);
         }
       });
 
@@ -1234,15 +1189,10 @@ app.post('/v1/chat/completions', async (req, res) => {
         buffer += decoder.end();
 
         if (buffer.trim()) {
-          const blocks = buffer.split(/(?:\r?\n){2,}/);
-          for (const block of blocks) {
-            const lines = block.split(/\r?\n/);
-            for (const line of lines) {
-              processLine(line);
-            }
+          for (const line of buffer.split('\n')) {
+            processLine(line);
           }
         }
-
 
         if (streamProcessor) {
           const finalChunk = streamProcessor.flush();

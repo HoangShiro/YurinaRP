@@ -731,21 +731,11 @@
             </div>
           </div>
           <div class="card-body">
-            <!-- Global Control Topbar -->
+            <!-- Global Fallback Toggle -->
             <div class="model-config-topbar card-subpanel">
               <div class="toggle-control-group">
                 <label class="switch-label">
-                  <span class="label-title"><i data-lucide="brain"></i> Enable Global Thinking / Reasoning Mode</span>
-                  <span class="label-desc">Automatically detect & inject model-specific thinking arguments without client [think] tag</span>
-                </label>
-                <label class="switch">
-                  <input type="checkbox" id="mcThinkingToggle" checked>
-                  <span class="slider round"></span>
-                </label>
-              </div>
-              <div class="toggle-control-group mt-3 pt-3 border-top-dashed">
-                <label class="switch-label">
-                  <span class="label-title"><i data-lucide="shield-alert"></i> Enable Automatic Fallback Chain</span>
+                  <span class="label-title">Enable Automatic Fallback Chain</span>
                   <span class="label-desc">Automatically try the next model in sequence if the preceding model fails</span>
                 </label>
                 <label class="switch">
@@ -755,15 +745,13 @@
               </div>
             </div>
 
-            <!-- Recently Used Models Bar -->
-            <div class="card-subpanel mt-4">
-              <div class="section-title-bar mb-2 flex-between">
-                <h4><i data-lucide="history"></i> Recently Used Models (Top 10)</h4>
-                <span class="text-muted text-xs">Auto-tracked from client requests</span>
-              </div>
-              <div id="mcRecentModelsList" class="recent-models-chips-container">
-                <!-- Rendered chips go here -->
-              </div>
+            <!-- Recently Used Models & Smart Thinking Registry -->
+            <div class="section-title-bar mt-4 mb-2">
+              <h4><i data-lucide="history"></i> Recently Used Models & Thinking Capabilities (Max 10)</h4>
+            </div>
+
+            <div id="mcRegistryList" class="registry-chain-list">
+              <!-- Rendered registry model cards go here -->
             </div>
 
             <!-- Fallback Models Chain List -->
