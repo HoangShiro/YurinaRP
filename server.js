@@ -314,7 +314,10 @@ async function callWithFallback(baseRequest, models) {
 
     } catch (err) {
       if (baseRequest.extra_body && err.response?.status === 400) {
-        console.warn(`[FALLBACK] Model ${model} failed with 400 and extra_body, retrying without thinking mode...`);
+        console.warn(`[FALLBACK] Model ${model} failed with 400 and extra_body, auto-caching supports_thinking=false and retrying without thinking mode...`);
+        setModelCapability(modelConfig, model, { supports_thinking: false, strategy: 'none' });
+        saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Auto-save capability error:', e.message));
+
         try {
           const cleanRequest = { ...baseRequest };
           delete cleanRequest.extra_body;
@@ -328,6 +331,7 @@ async function callWithFallback(baseRequest, models) {
             retryErr.response?.data?.error?.message || retryErr.message
           );
         }
+
       } else {
         lastError = err;
         console.warn(
@@ -1211,11 +1215,14 @@ app.post('/v1/chat/completions', async (req, res) => {
           return;
         }
 
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || '';
+        const blocks = buffer.split(/(?:\r?\n){2,}/);
+        buffer = blocks.pop() || '';
 
-        for (const line of lines) {
-          processLine(line);
+        for (const block of blocks) {
+          const lines = block.split(/\r?\n/);
+          for (const line of lines) {
+            processLine(line);
+          }
         }
       });
 
@@ -1227,10 +1234,15 @@ app.post('/v1/chat/completions', async (req, res) => {
         buffer += decoder.end();
 
         if (buffer.trim()) {
-          for (const line of buffer.split(/\r?\n/)) {
-            processLine(line);
+          const blocks = buffer.split(/(?:\r?\n){2,}/);
+          for (const block of blocks) {
+            const lines = block.split(/\r?\n/);
+            for (const line of lines) {
+              processLine(line);
+            }
           }
         }
+
 
         if (streamProcessor) {
           const finalChunk = streamProcessor.flush();
