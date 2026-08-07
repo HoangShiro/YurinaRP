@@ -18,7 +18,7 @@ const { processWorldStateTick, compileWorldStateSnapshot } = require('./scripts/
 const { analyzeAndUpdateState } = require('./scripts/stateTracker');
 const { fetchFullWorldState, saveFullWorldState } = require('./scripts/upstashWorldState');
 const { fetchChatHistory, saveChatHistory, fetchChatSummary, saveChatSummary } = require('./scripts/upstashChatHistory');
-const { fetchRemoteModelConfigStore, saveRemoteModelConfigStore, getDefaultModelConfig } = require('./scripts/upstashModelConfig');
+const { fetchRemoteModelConfigStore, saveRemoteModelConfigStore, getDefaultModelConfig, addRecentModel, setModelCapability } = require('./scripts/upstashModelConfig');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -637,6 +637,43 @@ app.post('/v1/model-config', async (req, res) => {
   }
 });
 
+async function probeModelThinking(modelId) {
+  if (!modelId || typeof modelId !== 'string') return { supports_thinking: false, strategy: 'none' };
+  
+  const strategies = [
+    { name: 'thinking', kwargs: { thinking: true } },
+    { name: 'thinking_mode', kwargs: { thinking_mode: 'enabled' } },
+    { name: 'reasoning_effort', kwargs: { reasoning_effort: 'high' } }
+  ];
+
+  for (const s of strategies) {
+    try {
+      const res = await axios.post(`${NIM_API_BASE}/chat/completions`, {
+        model: modelId,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 5,
+        stream: false,
+        extra_body: { chat_template_kwargs: s.kwargs }
+      }, {
+        headers: {
+          Authorization: `Bearer ${NIM_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      if (res.status === 200) {
+        console.log(`[PROBE] Model ${modelId} supports thinking strategy: '${s.name}'`);
+        return { supports_thinking: true, strategy: s.name };
+      }
+    } catch (err) {
+      console.log(`[PROBE] Strategy '${s.name}' unsupported for ${modelId}: ${err.response?.status || err.message}`);
+    }
+  }
+
+  console.log(`[PROBE] Model ${modelId} does not support thinking parameters`);
+  return { supports_thinking: false, strategy: 'none' };
+}
+
 app.post('/v1/model-test', async (req, res) => {
   const { model_id } = req.body;
   if (!model_id || typeof model_id !== 'string') {
@@ -658,13 +695,23 @@ app.post('/v1/model-test', async (req, res) => {
       timeout: 15000
     });
     const latency_ms = Date.now() - start;
-    return res.json({ ok: true, latency_ms, model: model_id });
+
+    // Auto-probe thinking capability if not cached yet
+    let cap = modelConfig.model_capabilities?.[model_id];
+    if (!cap) {
+      cap = await probeModelThinking(model_id);
+      setModelCapability(modelConfig, model_id, cap);
+      saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Failed auto-save capability:', e.message));
+    }
+
+    return res.json({ ok: true, latency_ms, model: model_id, capability: cap });
   } catch (err) {
     const latency_ms = Date.now() - start;
     const errorMsg = err.response?.data?.error?.message || err.response?.data?.detail || err.message;
     return res.json({ ok: false, latency_ms, model: model_id, error: errorMsg });
   }
 });
+
 
 // Legacy backward compatibility route
 app.get('/v1/lorebook', async (req, res) => {
@@ -923,102 +970,44 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
 
-    const hasThink = typeof model === 'string' && /\[think\]/i.test(model);
-    const cleanModel = typeof model === 'string' ? model.replace(/\[think\]/i, '').trim() : model;
+    const cleanModel = typeof model === 'string' ? model.trim() : model;
 
     const primaryModel = MODEL_MAPPING[cleanModel] || cleanModel;
     const modelChain = getActiveModelChain(primaryModel);
 
-    const requestEnableThinking = ENABLE_THINKING_MODE || hasThink;
-    const requestShowReasoning = SHOW_REASONING || hasThink;
-
-    // 1. Fetch System Prompt Store & Tiered LorebookStore
-    const systemPromptStore = await fetchRemoteSystemPromptStore();
-    const lorebookStore = await fetchRemoteLorebookStore();
-
-    // Prepend base system prompt if configured
-    if (systemPromptStore && systemPromptStore.system_prompt && Array.isArray(messages) && messages.length > 0) {
-      if (messages[0].role === 'system') {
-        if (typeof messages[0].content === 'string' && !messages[0].content.includes(systemPromptStore.system_prompt)) {
-          messages[0].content = systemPromptStore.system_prompt + '\n\n' + messages[0].content;
-        }
-      } else {
-        messages.unshift({ role: 'system', content: systemPromptStore.system_prompt });
-      }
+    // Record model usage into recent_models
+    if (primaryModel && addRecentModel(modelConfig, primaryModel)) {
+      saveRemoteModelConfigStore(modelConfig).catch(e => console.warn('[CONFIG] Auto-save recent_models error:', e.message));
     }
 
-    // 2. Process World State & Lorebook Store ONLY if Lorebook System is active
-    const loreActive = isLorebookStoreActive(lorebookStore);
-    const worldStateActive = shouldIncludeWorldState(lorebookStore);
+    // Determine thinking extra_body based on cached capability or default
+    const isGlobalThinkingEnabled = modelConfig.thinking_enabled !== false;
+    let extraBody = undefined;
 
-    if (loreActive) {
-      const compiledLore = compileLorebookStore(lorebookStore, messages);
-      const contextParts = [];
-
-      if (worldStateActive) {
-        const worldState = await processWorldStateTick(messages);
-        const worldSnapshot = compileWorldStateSnapshot(worldState);
-        if (worldSnapshot) contextParts.push(worldSnapshot);
-      }
-
-      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'context') {
-        contextParts.push(compiledLore.compiledPrompt);
-      }
-      const combinedContext = contextParts.filter(Boolean).join('\n\n');
-
-      if (combinedContext && Array.isArray(messages) && messages.length > 0) {
-        if (messages[0].role === 'system') {
-          if (typeof messages[0].content === 'string') {
-            messages[0].content += '\n\n' + combinedContext;
-          }
-        } else {
-          messages.unshift({ role: 'system', content: combinedContext });
+    if (isGlobalThinkingEnabled) {
+      const cap = modelConfig.model_capabilities?.[primaryModel];
+      if (cap && cap.supports_thinking) {
+        if (cap.strategy === 'thinking_mode') {
+          extraBody = { chat_template_kwargs: { thinking_mode: 'enabled' } };
+        } else if (cap.strategy === 'reasoning_effort') {
+          extraBody = { chat_template_kwargs: { reasoning_effort: 'high' } };
+        } else if (cap.strategy === 'thinking') {
+          extraBody = { chat_template_kwargs: { thinking: true } };
         }
-      }
-
-      if (compiledLore.compiledPrompt && compiledLore.insertionMode === 'user_msg') {
-        for (let i = messages.length - 1; i >= 0; i--) {
-          if (messages[i].role === 'user') {
-            if (typeof messages[i].content === 'string') {
-              messages[i].content += '\n\n' + compiledLore.compiledPrompt;
-            }
-            break;
-          }
-        }
+      } else if (!cap) {
+        const isMinimaxM3 = (typeof primaryModel === 'string' && primaryModel.toLowerCase().includes('minimax-m3'));
+        extraBody = { chat_template_kwargs: isMinimaxM3 ? { thinking_mode: 'enabled' } : { thinking: true } };
       }
     }
-
-    const {
-      messages: eventProcessedMessages,
-      fixFormat,
-      autoLineBreak,
-      triggeredPrompts
-    } = processEventTriggers(messages, systemPromptStore);
-
-    if (triggeredPrompts.length > 0) {
-      console.log(`[PROXY] Activated ${triggeredPrompts.length} event trigger prompt(s)`);
-    }
-    if (fixFormat) console.log('[PROXY] Feature: Fix format ENABLED');
-    if (autoLineBreak) console.log('[PROXY] Feature: Auto line break ENABLED');
-
-    const processedMessages = processOocPrompts(eventProcessedMessages);
-
-    const isMinimaxM3 = (typeof cleanModel === 'string' && cleanModel.toLowerCase().includes('minimax-m3')) ||
-                        (typeof MODEL_MAPPING[cleanModel] === 'string' && MODEL_MAPPING[cleanModel].toLowerCase().includes('minimax-m3'));
-
-    const thinkingKwargs = isMinimaxM3
-      ? { thinking_mode: 'enabled' }
-      : { thinking: true };
 
     const baseRequest = {
       messages: processedMessages,
       temperature: temperature ?? 0.7,
       max_tokens: Math.min(max_tokens ?? 2048, MAX_TOKENS_LIMIT),
       stream: stream || false,
-      extra_body: requestEnableThinking
-        ? { chat_template_kwargs: thinkingKwargs }
-        : undefined
+      extra_body: extraBody
     };
+
 
     const { response, model: usedModel } = await callWithFallback(baseRequest, modelChain);
     upstreamStream = response.data;

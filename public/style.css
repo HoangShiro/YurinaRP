@@ -1607,6 +1607,74 @@ input:checked + .slider:before {
   }
 }
 
+.border-top-dashed {
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+/* Brain / Thinking Badge */
+.badge-thinking {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Recent Models Chips Container */
+.recent-models-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 38px;
+  align-items: center;
+}
+
+.recent-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.76rem;
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+.recent-model-chip:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.recent-model-add-btn {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recent-model-add-btn:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+
 
 
 

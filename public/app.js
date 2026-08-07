@@ -62,7 +62,9 @@
     spRuleEditorView: document.getElementById('spRuleEditorView'),
 
     // Model Config Elements
+    mcThinkingToggle: document.getElementById('mcThinkingToggle'),
     mcFallbackToggle: document.getElementById('mcFallbackToggle'),
+    mcRecentModelsList: document.getElementById('mcRecentModelsList'),
     mcModelList: document.getElementById('mcModelList'),
     mcAddModelId: document.getElementById('mcAddModelId'),
     mcAddModelLabel: document.getElementById('mcAddModelLabel'),
@@ -1224,9 +1226,13 @@
         el.btnMcSave.innerHTML = `<i data-lucide="loader" class="spin"></i> Saving...`;
       }
       const payload = {
+        thinking_enabled: state.modelConfig.thinking_enabled !== false,
         fallback_enabled: state.modelConfig.fallback_enabled,
-        fallback_models: state.modelConfig.fallback_models
+        fallback_models: state.modelConfig.fallback_models,
+        recent_models: state.modelConfig.recent_models || [],
+        model_capabilities: state.modelConfig.model_capabilities || {}
       };
+
       const res = await fetch('/v1/model-config', {
         method: 'POST',
         headers: getHeaders(),
@@ -1250,8 +1256,26 @@
   }
 
   function renderModelConfigUI() {
+    if (el.mcThinkingToggle) {
+      el.mcThinkingToggle.checked = state.modelConfig.thinking_enabled !== false;
+    }
     if (el.mcFallbackToggle) {
       el.mcFallbackToggle.checked = !!state.modelConfig.fallback_enabled;
+    }
+
+    // Render Recent Models Chips Bar
+    if (el.mcRecentModelsList) {
+      const recent = state.modelConfig.recent_models || [];
+      if (recent.length === 0) {
+        el.mcRecentModelsList.innerHTML = `<span class="text-muted text-xs font-italic">No recently used models recorded yet.</span>`;
+      } else {
+        el.mcRecentModelsList.innerHTML = recent.map(id => `
+          <div class="recent-model-chip" title="Click + to add to Fallback Chain">
+            <span>${escapeHtml(id)}</span>
+            <button type="button" class="recent-model-add-btn btn-add-recent" data-id="${escapeHtml(id)}" title="Add to Fallback Chain">+</button>
+          </div>
+        `).join('');
+      }
     }
 
     if (!el.mcModelList) return;
@@ -1263,10 +1287,13 @@
       return;
     }
 
+    const caps = state.modelConfig.model_capabilities || {};
+
     el.mcModelList.innerHTML = models.map((m, idx) => {
       const isFirst = idx === 0;
       const isLast = idx === models.length - 1;
       const test = state.modelTestResults[m.id] || {};
+      const cap = caps[m.id];
 
       let statusBadge = `<span class="model-status-badge status-untested"><i data-lucide="help-circle"></i> Untested</span>`;
       if (test.testing) {
@@ -1276,6 +1303,12 @@
       } else if (test.error) {
         statusBadge = `<span class="model-status-badge status-offline" title="${escapeHtml(test.error)}"><i data-lucide="alert-triangle"></i> Offline</span>`;
       }
+
+      const thinkingBadge = cap && cap.supports_thinking ? `
+        <span class="badge-thinking" title="Strategy: ${escapeHtml(cap.strategy)}">
+          <i data-lucide="brain"></i> Thinking
+        </span>
+      ` : '';
 
       const errorBox = test.error ? `
         <div class="model-error-detail">
@@ -1293,6 +1326,7 @@
                 <div class="model-card-title">
                   <input type="checkbox" class="mc-toggle-item" data-index="${idx}" ${m.enabled ? 'checked' : ''}>
                   <span>${escapeHtml(m.label || m.id)}</span>
+                  ${thinkingBadge}
                 </div>
                 <div class="model-card-id">${escapeHtml(m.id)}</div>
               </div>
@@ -1300,7 +1334,7 @@
             <div class="model-card-right">
               ${statusBadge}
               <div class="model-actions">
-                <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency">
+                <button class="btn btn-secondary btn-xs btn-mc-test" data-id="${escapeHtml(m.id)}" title="Test model latency & auto-detect thinking">
                   <i data-lucide="flask-conical"></i>
                 </button>
                 <button class="btn btn-secondary btn-xs btn-mc-up" data-index="${idx}" ${isFirst ? 'disabled' : ''} title="Move Up">
@@ -1323,6 +1357,7 @@
     if (window.lucide) window.lucide.createIcons();
   }
 
+
   async function testSingleModel(modelId) {
     state.modelTestResults[modelId] = { testing: true };
     renderModelConfigUI();
@@ -1340,10 +1375,15 @@
         error: data.error
       };
       if (data.ok) {
+        if (data.capability) {
+          if (!state.modelConfig.model_capabilities) state.modelConfig.model_capabilities = {};
+          state.modelConfig.model_capabilities[modelId] = data.capability;
+        }
         log(`Model ${modelId} is online! Latency: ${data.latency_ms}ms`, 'info');
       } else {
         log(`Model ${modelId} test failed: ${data.error}`, 'error');
       }
+
     } catch (err) {
       state.modelTestResults[modelId] = {
         testing: false,
@@ -1419,11 +1459,42 @@
     });
 
     // Model Config Events
+    if (el.mcThinkingToggle) {
+      el.mcThinkingToggle.addEventListener('change', (e) => {
+        state.modelConfig.thinking_enabled = e.target.checked;
+        log(`Global Thinking Mode set to: ${e.target.checked ? 'ENABLED' : 'DISABLED'}`, 'info');
+      });
+    }
+
     if (el.mcFallbackToggle) {
       el.mcFallbackToggle.addEventListener('change', (e) => {
         state.modelConfig.fallback_enabled = e.target.checked;
       });
     }
+
+    if (el.mcRecentModelsList) {
+      el.mcRecentModelsList.addEventListener('click', (e) => {
+        const btnAddRecent = e.target.closest('.btn-add-recent');
+        if (btnAddRecent) {
+          const modelId = btnAddRecent.dataset.id;
+          if (!Array.isArray(state.modelConfig.fallback_models)) {
+            state.modelConfig.fallback_models = [];
+          }
+          if (state.modelConfig.fallback_models.some(m => m.id === modelId)) {
+            log(`Model ${modelId} is already in fallback chain`, 'warn');
+            return;
+          }
+          state.modelConfig.fallback_models.push({
+            id: modelId,
+            label: modelId,
+            enabled: true
+          });
+          renderModelConfigUI();
+          log(`Added ${modelId} to Fallback Chain from recent models. Click Save to commit.`, 'info');
+        }
+      });
+    }
+
 
     if (el.btnMcSave) {
       el.btnMcSave.addEventListener('click', saveModelConfig);
